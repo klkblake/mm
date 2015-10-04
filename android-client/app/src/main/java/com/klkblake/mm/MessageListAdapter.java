@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 
 /**
  * Created by kyle on 1/10/15.
@@ -101,13 +103,11 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                 if (view == null) {
                     view = new ImageView(context);
                 }
-                // FIXME Do properly.
                 view.setImageBitmap(message.photos[0]);
                 view.setAdjustViewBounds(true);
                 view.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        // FIXME do properly
                         Intent intent = new Intent(Intent.ACTION_VIEW);
                         intent.setDataAndType(message.photoUris[0], "image/jpeg");
                         if (intent.resolveActivity(v.getContext().getPackageManager()) != null) {
@@ -138,6 +138,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                         columns = 3;
                     }
                     int photoIndex = 0;
+                    // FIXME latency
                     // TODO figure out the optimal order of operations to save time
                     view = new TableLayout(context);
                     view.setStretchAllColumns(true);
@@ -187,11 +188,14 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                     @Override
                     public void onClick(View v) {
                         // FIXME do properly
-                        Intent intent = new Intent(Intent.ACTION_VIEW);
-                        intent.setDataAndType(message.photoUris[0], "image/jpeg");
-                        if (intent.resolveActivity(v.getContext().getPackageManager()) != null) {
-                            v.getContext().startActivity(intent);
-                        }
+                        //Intent intent = new Intent(Intent.ACTION_VIEW);
+                        //intent.setDataAndType(message.photoUris[0], "image/jpeg");
+                        //if (intent.resolveActivity(v.getContext().getPackageManager()) != null) {
+                        //    v.getContext().startActivity(intent);
+                        //}
+                        Intent intent = new Intent(v.getContext(), AlbumActivity.class);
+                        intent.putExtra(AlbumActivity.EXTRA_PHOTO_URIS, new ArrayList<>(Arrays.asList(message.photoUris)));
+                        v.getContext().startActivity(intent);
                     }
                 });
                 return view;
@@ -229,6 +233,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
         add(new Message(messages.size(), author, message));
     }
 
+    // TODO should we even be doing this processing here?
     public void add(String author, Bitmap photo, File photoFile) {
         int messageId = messages.size();
         photosDir.mkdir();
