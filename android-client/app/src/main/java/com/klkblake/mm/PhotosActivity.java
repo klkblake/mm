@@ -1,5 +1,6 @@
 package com.klkblake.mm;
 
+import java.io.File;
 import java.util.ArrayList;
 
 import android.app.Fragment;
@@ -17,7 +18,8 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 
 public class PhotosActivity extends AppActivity {
-    public static final String EXTRA_PHOTO_URIS = "photo_uris";
+    public static final String EXTRA_PHOTO_DIR = "photo_dir";
+    public static final String EXTRA_PHOTO_COUNT = "photo_count";
     private ViewPager pager;
     private Uri[] photoUris;
 
@@ -25,8 +27,13 @@ public class PhotosActivity extends AppActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_photos);
-        ArrayList<Uri> uris = getIntent().getParcelableArrayListExtra(EXTRA_PHOTO_URIS);
-        photoUris = uris.toArray(new Uri[uris.size()]);
+        Intent intent = getIntent();
+        File photoDir = (File) intent.getSerializableExtra(EXTRA_PHOTO_DIR);
+        int count = intent.getIntExtra(EXTRA_PHOTO_COUNT, 0);
+        photoUris = new Uri[count];
+        for (int i = 0; i < count; i++) {
+            photoUris[i] = App.getUriForFile(new File(photoDir, i + ".jpg"));
+        }
         PhotosPagerAdapter adapter = new PhotosPagerAdapter(getFragmentManager());
         pager = (ViewPager) findViewById(R.id.pager);
         pager.setAdapter(adapter);
