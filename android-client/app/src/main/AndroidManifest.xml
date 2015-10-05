@@ -21,8 +21,7 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".AlbumActivity"
-            android:label="@string/title_activity_album"
+            android:name=".PhotosActivity"
             android:parentActivityName=".MainActivity">
             <meta-data
                 android:name="android.support.PARENT_ACTIVITY"

@@ -1,15 +1,11 @@
 package com.klkblake.mm;
 
 import java.util.ArrayList;
-import java.util.Locale;
 
-import android.app.Activity;
 import android.app.Fragment;
 import android.app.FragmentManager;
 import android.content.Intent;
 import android.net.Uri;
-import android.os.Parcelable;
-import android.support.v13.app.FragmentPagerAdapter;
 import android.os.Bundle;
 import android.support.v13.app.FragmentStatePagerAdapter;
 import android.support.v4.view.ViewPager;
@@ -20,7 +16,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 
-public class AlbumActivity extends AppActivity {
+public class PhotosActivity extends AppActivity {
     public static final String EXTRA_PHOTO_URIS = "photo_uris";
     private ViewPager pager;
     private Uri[] photoUris;
@@ -28,10 +24,10 @@ public class AlbumActivity extends AppActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_album);
+        setContentView(R.layout.activity_photos);
         ArrayList<Uri> uris = getIntent().getParcelableArrayListExtra(EXTRA_PHOTO_URIS);
         photoUris = uris.toArray(new Uri[uris.size()]);
-        AlbumPagerAdapter adapter = new AlbumPagerAdapter(getFragmentManager());
+        PhotosPagerAdapter adapter = new PhotosPagerAdapter(getFragmentManager());
         pager = (ViewPager) findViewById(R.id.pager);
         pager.setAdapter(adapter);
         setTitle("Viewing " + Integer.toString(photoUris.length) + " photos");
@@ -40,7 +36,7 @@ public class AlbumActivity extends AppActivity {
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_album, menu);
+        getMenuInflater().inflate(R.menu.menu_photos, menu);
         return true;
     }
 
@@ -76,8 +72,8 @@ public class AlbumActivity extends AppActivity {
         }
     }
 
-    public class AlbumPagerAdapter extends FragmentStatePagerAdapter {
-        public AlbumPagerAdapter(FragmentManager fm) {
+    public class PhotosPagerAdapter extends FragmentStatePagerAdapter {
+        public PhotosPagerAdapter(FragmentManager fm) {
             super(fm);
         }
 

@@ -82,19 +82,13 @@ message implicitly `ACK`s every message before it. The timestamp is a 16-digit
 hexadecimal millisecond offset from the Unix Epoch representing the time the
 server received it.
 
-    >PHOTO <size>
+    >PHOTOS <size> <size> <size>...
     <ACK <id> <timestamp>
 
-Send a photo. The actual data for the photo must be sent on the data channel
+Send photos. The actual data for the photo must be sent on the data channel
 once the client receives the message ID. The photo is encoded as a JPEG of the
-specified size.
-
-    >ALBUM <size> <size> <size>...
-    <ACK <id> <timestamp>
-
-Send a group of related photos. The count gives the number of photos in the
-album. The number of photos is implicitly capped to 340 due to the cap on the
-encoded ciphertext size.
+specified size. The number of photos is implicitly capped to 340 due to the cap
+on the encoded ciphertext size.
 
     >AUDIO <size>
     <ACK <id> <timestamp>
@@ -107,8 +101,7 @@ Send a short audio recording. Format TBA.
 Send a short video recording. Format TBA.
 
     <TEXT <id> <timestamp> <message contents>
-    <PHOTO <id> <timestamp> <size>
-    <ALBUM <id> <timestamp> <size> <size> <size>...
+    <PHOTOS <id> <timestamp> <size> <size> <size>...
     <AUDIO <id> <timestamp> <size>
     <VIDEO <id> <timestamp> <size>
     >ACK

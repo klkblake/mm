@@ -30,7 +30,7 @@ import static com.klkblake.mm.Message.*;
  * Created by kyle on 1/10/15.
  */
 public class MessageListAdapter extends BaseAdapter implements AbsListView.RecyclerListener {
-    public static final int MAX_ALBUM_PREVIEW_PHOTOS = 9;
+    public static final int MAX_PREVIEW_PHOTOS = 9;
     private final File photosDir;
     private ArrayList<Message> messages = new ArrayList<>();
 
@@ -63,9 +63,9 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
     @Override
     public int getItemViewType(int position) {
         Message message = messages.get(position);
-        if (message.type == MessageType.ALBUM) {
+        if (message.type == MessageType.PHOTOS) {
             // We have a separate type for an overflowing grid.
-            int nudge = message.photoUris.length > MAX_ALBUM_PREVIEW_PHOTOS ? 0 : 1;
+            int nudge = message.photoUris.length > MAX_PREVIEW_PHOTOS ? 0 : 1;
             return MessageType.values().length + message.photos.length - nudge;
         }
         return messages.get(position).type.ordinal();
@@ -73,7 +73,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
 
     @Override
     public int getViewTypeCount() {
-        return MessageType.values().length + MAX_ALBUM_PREVIEW_PHOTOS + 1;
+        return MessageType.values().length + MAX_PREVIEW_PHOTOS + 1;
     }
 
     @Override
@@ -104,27 +104,27 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                 view.setText(message.text);
                 return view;
             }
-            case PHOTO: {
-                ImageView view = (ImageView) convertView;
-                if (view == null) {
-                    view = new ImageView(context);
-                }
-                view.setImageBitmap(message.photos[0]);
-                view.setAdjustViewBounds(true);
-                view.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        Intent intent = new Intent(Intent.ACTION_VIEW);
-                        intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                        intent.setDataAndType(message.photoUris[0], "image/jpeg");
-                        App.tryStartActivity(intent);
-                    }
-                });
-                return view;
-            }
-            case ALBUM: {
+            case PHOTOS: {
                 int count = message.photos.length;
-                boolean overflow = message.photoUris.length > MAX_ALBUM_PREVIEW_PHOTOS;
+                if (count == 1) {
+                    ImageView view = (ImageView) convertView;
+                    if (view == null) {
+                        view = new ImageView(context);
+                    }
+                    view.setImageBitmap(message.photos[0]);
+                    view.setAdjustViewBounds(true);
+                    view.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            Intent intent = new Intent(Intent.ACTION_VIEW);
+                            intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                            intent.setDataAndType(message.photoUris[0], "image/jpeg");
+                            App.tryStartActivity(intent);
+                        }
+                    });
+                    return view;
+                }
+                boolean overflow = message.photoUris.length > MAX_PREVIEW_PHOTOS;
                 TableLayout view = (TableLayout) convertView;
                 if (view == null) {
                     int rows, columns;
@@ -153,7 +153,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                             View entry;
                             ImageView image = new SquareImageView(context);
                             image.setScaleType(ImageView.ScaleType.CENTER_CROP);
-                            if (photoIndex++ == MAX_ALBUM_PREVIEW_PHOTOS - 1 && overflow) {
+                            if (photoIndex++ == MAX_PREVIEW_PHOTOS - 1 && overflow) {
                                 FrameLayout frame = new FrameLayout(context);
                                 frame.addView(image);
                                 TextView text = new TextView(context);
@@ -179,7 +179,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                     TableRow row = (TableRow) view.getChildAt(rowIndex);
                     for (int columnIndex = 0; columnIndex < row.getChildCount(); columnIndex++) {
                         ImageView entry;
-                        if (photoIndex == MAX_ALBUM_PREVIEW_PHOTOS - 1 && overflow) {
+                        if (photoIndex == MAX_PREVIEW_PHOTOS - 1 && overflow) {
                             FrameLayout frame = (FrameLayout) row.getChildAt(columnIndex);
                             ((TextView) frame.getChildAt(1)).setText("+ " + Integer.toString(message.photoUris.length - count) + " more");
                             entry = (ImageView) frame.getChildAt(0);
@@ -193,8 +193,8 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                     @Override
                     public void onClick(View v) {
                         // FIXME do properly
-                        Intent intent = new Intent(App.context, AlbumActivity.class);
-                        intent.putExtra(AlbumActivity.EXTRA_PHOTO_URIS, new ArrayList<>(Arrays.asList(message.photoUris)));
+                        Intent intent = new Intent(App.context, PhotosActivity.class);
+                        intent.putExtra(PhotosActivity.EXTRA_PHOTO_URIS, new ArrayList<>(Arrays.asList(message.photoUris)));
                         App.startActivity(intent);
                     }
                 });

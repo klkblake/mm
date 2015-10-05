@@ -1,8 +1,6 @@
 package com.klkblake.mm;
 
-import android.app.Activity;
 import android.content.ClipData;
-import android.content.ContentResolver;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -15,7 +13,6 @@ import android.text.TextWatcher;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.Toast;
@@ -138,8 +135,8 @@ public class MainActivity extends AppActivity {
             } else {
                 count = selected.getItemCount();
                 int numBitmaps = count;
-                if (numBitmaps > MessageListAdapter.MAX_ALBUM_PREVIEW_PHOTOS) {
-                    numBitmaps = MessageListAdapter.MAX_ALBUM_PREVIEW_PHOTOS;
+                if (numBitmaps > MessageListAdapter.MAX_PREVIEW_PHOTOS) {
+                    numBitmaps = MessageListAdapter.MAX_PREVIEW_PHOTOS;
                 }
                 photos = new Bitmap[numBitmaps];
                 photoUris = new Uri[count];
@@ -157,6 +154,7 @@ public class MainActivity extends AppActivity {
             }
             for (int i = 0; i < photos.length; i++) {
                 try {
+                    // TODO make this respect EXIF rotation
                     BitmapFactory.Options options = new BitmapFactory.Options();
                     options.inJustDecodeBounds = true;
                     BitmapFactory.decodeStream(App.openInputStream(photoUris[i]), null, options);

@@ -5,6 +5,5 @@ package com.klkblake.mm;
  */
 public enum MessageType {
     TEXT,
-    PHOTO,
-    ALBUM,
+    PHOTOS,
 }
