@@ -19,6 +19,7 @@ import java.io.InputStream;
  */
 public class App {
     public static Context context;
+    public static Context activityContext;
     public static Resources resources;
     public static PackageManager packageManager;
     public static ContentResolver contentResolver;
@@ -30,6 +31,14 @@ public class App {
         contentResolver = context.getContentResolver();
     }
 
+    public static void onActivityResume(Activity activity) {
+        activityContext = activity;
+    }
+
+    public static void onActivityPause() {
+        activityContext = null;
+    }
+
     public static Uri getUriForFile(File file) {
         return FileProvider.getUriForFile(context, "com.klkblake.mm.fileprovider", file);
     }
@@ -39,7 +48,7 @@ public class App {
     }
 
     public static void startActivity(Intent intent) {
-        context.startActivity(intent);
+        activityContext.startActivity(intent);
     }
 
     public static void tryStartActivity(Intent intent) {

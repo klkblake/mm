@@ -20,7 +20,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 
-public class AlbumActivity extends Activity {
+public class AlbumActivity extends AppActivity {
     public static final String EXTRA_PHOTO_URIS = "photo_uris";
     private ViewPager pager;
     private Uri[] photoUris;
@@ -28,7 +28,6 @@ public class AlbumActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        App.onActivityCreate(this);
         setContentView(R.layout.activity_album);
         ArrayList<Uri> uris = getIntent().getParcelableArrayListExtra(EXTRA_PHOTO_URIS);
         photoUris = uris.toArray(new Uri[uris.size()]);

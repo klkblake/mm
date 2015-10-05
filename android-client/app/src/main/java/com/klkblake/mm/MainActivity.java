@@ -9,7 +9,9 @@ import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.support.design.widget.FloatingActionButton;
 import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -24,27 +26,40 @@ import java.io.FileNotFoundException;
 import static com.klkblake.mm.Message.*;
 
 
-public class MainActivity extends Activity {
+public class MainActivity extends AppActivity {
     private static final int REQUEST_TAKE_PHOTO = 1;
     private static final int REQUEST_SELECT_PHOTOS = 2;
     private ListView messageList;
     private EditText composeText;
-    private Button sendButton;
+    private FloatingActionButton sendButton;
     private MessageListAdapter messages;
     private File photoFile;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        App.onActivityCreate(this);
         File cacheDir = getCacheDir();
         photoFile = new File(cacheDir, "photo.jpg");
         setContentView(R.layout.activity_main);
         messageList = (ListView) findViewById(R.id.messageList);
         composeText = (EditText) findViewById(R.id.composeText);
-        sendButton = (Button) findViewById(R.id.sendButton);
+        sendButton = (FloatingActionButton) findViewById(R.id.sendButton);
         messages = new MessageListAdapter(cacheDir);
         messageList.setAdapter(messages);
+        composeText.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                sendButton.setEnabled(s.toString().trim().length() != 0);
+            }
+        });
     }
 
     @Override
