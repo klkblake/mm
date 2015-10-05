@@ -3,6 +3,7 @@ package com.klkblake.mm;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.view.Gravity;
@@ -30,7 +31,6 @@ import java.util.Collections;
  */
 public class MessageListAdapter extends BaseAdapter implements AbsListView.RecyclerListener {
     public static final int MAX_ALBUM_PREVIEW_PHOTOS = 9;
-    private final File externalFilesDir;
     private final File photosDir;
     private ArrayList<Message> messages = new ArrayList<>();
 
@@ -41,9 +41,8 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
         messages.add(new Message(3, "user1", "I slept reasonably well too."));
     }
 
-    public MessageListAdapter(File externalFilesDir) {
-        this.externalFilesDir = externalFilesDir;
-        photosDir = new File(externalFilesDir, "photos");
+    public MessageListAdapter(File cacheDir) {
+        photosDir = new File(cacheDir, "photos");
     }
 
     @Override
@@ -93,8 +92,15 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                 } else if (message.author.equals(("user1"))) {
                     color = 0xffaaffaa;
                 }
-                assert color != 0;
+                ColorStateList textColor;
+                // "Dark" and "Light" in these color names refer to the themes they are part of
+                if (Util.perceivedBrightness(color) < 0.5f) {
+                    textColor = context.getResources().getColorStateList(R.color.abc_primary_text_material_dark);
+                } else {
+                    textColor = context.getResources().getColorStateList(R.color.abc_primary_text_material_light);
+                }
                 view.setBackgroundColor(color);
+                view.setTextColor(textColor);
                 view.setText(message.text);
                 return view;
             }
@@ -109,6 +115,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                     @Override
                     public void onClick(View v) {
                         Intent intent = new Intent(Intent.ACTION_VIEW);
+                        intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         intent.setDataAndType(message.photoUris[0], "image/jpeg");
                         if (intent.resolveActivity(v.getContext().getPackageManager()) != null) {
                             v.getContext().startActivity(intent);
@@ -234,29 +241,33 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
     }
 
     // TODO should we even be doing this processing here?
-    public void add(String author, Bitmap photo, File photoFile) {
+    public void add(Context context, String author, Bitmap photo, File photoFile) {
         int messageId = messages.size();
         photosDir.mkdir();
         if (!photosDir.isDirectory()) {
+            // XXX Failure point
             throw new RuntimeException("Directory " + photosDir + " doesn't exist?");
         }
         File photoDestFile = new File(photosDir, Integer.toString(messageId) + ".jpg");
         if (!photoFile.renameTo(photoDestFile)) {
+            // XXX Failure point
             throw new RuntimeException("Failed to rename " + photoFile + " to " + photoDestFile);
         }
-        add(new Message(messageId, author, photo, Uri.fromFile(photoDestFile)));
+        add(new Message(messageId, author, photo, Util.getUriForFile(context, photoDestFile)));
     }
 
     // Returns -1 on success, or else the index of the photo that failed.
-    public int add(String author, Bitmap[] photos, Uri[] photoUris, ContentResolver contentResolver) {
+    public int add(Context context, String author, Bitmap[] photos, Uri[] photoUris) {
         int messageId = messages.size();
         photosDir.mkdir();
         if (!photosDir.isDirectory()) {
+            // XXX Failure point
             throw new RuntimeException("Could not create directory " + photosDir);
         }
         File messageDir = new File(photosDir, Integer.toString(messageId));
         messageDir.mkdir();
         if (!messageDir.isDirectory()) {
+            // XXX Failure point
             throw new RuntimeException("Could not create directory " + messageDir);
         }
         Uri[] newPhotoUris = new Uri[photoUris.length];
@@ -264,7 +275,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
         for (int i = 0; i < photoUris.length; i++) {
             try {
                 File photoFile = new File(messageDir, Integer.toString(i) + ".jpg");
-                InputStream stream = contentResolver.openInputStream(photoUris[i]);
+                InputStream stream = context.getContentResolver().openInputStream(photoUris[i]);
                 OutputStream out = new FileOutputStream(photoFile);
                 while (true) {
                     int read = stream.read(buffer);
@@ -274,8 +285,9 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                     out.write(buffer, 0, read);
                 }
                 out.close();
-                newPhotoUris[i] = Uri.fromFile(photoFile);
+                newPhotoUris[i] = Util.getUriForFile(context, photoFile);
             } catch (IOException e) {
+                // XXX Failure point
                 return i;
             }
         }

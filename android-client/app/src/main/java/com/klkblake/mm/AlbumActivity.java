@@ -53,7 +53,7 @@ public class AlbumActivity extends Activity {
         switch (id) {
             case R.id.action_share: {
                 Intent intent = new Intent(Intent.ACTION_SEND);
-                intent.setAction(Intent.ACTION_SEND);
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 intent.setType("image/jpeg");
                 intent.putExtra(Intent.EXTRA_STREAM, photoUris[pager.getCurrentItem()]);
                 startActivity(Intent.createChooser(intent, "Share with"));
@@ -61,6 +61,7 @@ public class AlbumActivity extends Activity {
             }
             case R.id.action_view: {
                 Intent intent = new Intent(Intent.ACTION_VIEW);
+                intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 intent.setDataAndType(photoUris[pager.getCurrentItem()], "image/jpeg");
                 // TODO decide whether to use a chooser here
                 startActivity(Intent.createChooser(intent, "View in"));

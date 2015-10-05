@@ -34,13 +34,13 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        File externalFilesDir = getExternalFilesDir(null);
-        photoFile = new File(externalFilesDir, "photo.jpg");
+        File cacheDir = getCacheDir();
+        photoFile = new File(cacheDir, "photo.jpg");
         setContentView(R.layout.activity_main);
         messageList = (ListView) findViewById(R.id.messageList);
         composeText = (EditText) findViewById(R.id.composeText);
         sendButton = (Button) findViewById(R.id.sendButton);
-        messages = new MessageListAdapter(externalFilesDir);
+        messages = new MessageListAdapter(cacheDir);
         messageList.setAdapter(messages);
     }
 
@@ -78,7 +78,8 @@ public class MainActivity extends Activity {
 
     public void takePhoto(View view) {
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        intent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(photoFile));
+        intent.setFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+        intent.putExtra(MediaStore.EXTRA_OUTPUT, Util.getUriForFile(getApplicationContext(), photoFile));
         if (intent.resolveActivity(getPackageManager()) != null) {
             startActivityForResult(intent, REQUEST_TAKE_PHOTO);
         }
@@ -104,7 +105,7 @@ public class MainActivity extends Activity {
             options.inJustDecodeBounds = false;
             options.inSampleSize = options.outWidth / messageList.getWidth();
             Bitmap photo = BitmapFactory.decodeFile(photoPath, options);
-            messages.add("user2", photo, photoFile);
+            messages.add(getApplicationContext(), "user2", photo, photoFile);
         }
         if (requestCode == REQUEST_SELECT_PHOTOS && resultCode == RESULT_OK) {
             ClipData selected = data.getClipData();
@@ -146,12 +147,14 @@ public class MainActivity extends Activity {
                     options.inSampleSize = options.outWidth / messageList.getWidth() * columns;
                     photos[i] = BitmapFactory.decodeStream(cr.openInputStream(photoUris[i]), null, options);
                 } catch (FileNotFoundException e) {
+                    // XXX Failure point
                     couldntReadPhoto(i);
                     return;
                 }
             }
-            int failIndex = messages.add("user2", photos, photoUris, cr);
+            int failIndex = messages.add(getApplicationContext(), "user2", photos, photoUris);
             if (failIndex != -1) {
+                // XXX Failure point
                 couldntReadPhoto(failIndex);
                 return;
             }
