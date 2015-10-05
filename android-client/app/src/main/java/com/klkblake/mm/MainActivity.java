@@ -21,6 +21,8 @@ import android.widget.Toast;
 import java.io.File;
 import java.io.FileNotFoundException;
 
+import static com.klkblake.mm.Message.*;
+
 
 public class MainActivity extends Activity {
     private static final int REQUEST_TAKE_PHOTO = 1;
@@ -72,7 +74,7 @@ public class MainActivity extends Activity {
         if (text.length() == 0) {
             return;
         }
-        messages.add("user2", text);
+        messages.add(AUTHOR_US, text);
         textContent.clear();
     }
 
@@ -105,7 +107,7 @@ public class MainActivity extends Activity {
             options.inJustDecodeBounds = false;
             options.inSampleSize = options.outWidth / messageList.getWidth();
             Bitmap photo = BitmapFactory.decodeFile(photoPath, options);
-            messages.add(getApplicationContext(), "user2", photo, photoFile);
+            messages.add(getApplicationContext(), AUTHOR_US, photo, photoFile);
         }
         if (requestCode == REQUEST_SELECT_PHOTOS && resultCode == RESULT_OK) {
             ClipData selected = data.getClipData();
@@ -152,7 +154,7 @@ public class MainActivity extends Activity {
                     return;
                 }
             }
-            int failIndex = messages.add(getApplicationContext(), "user2", photos, photoUris);
+            int failIndex = messages.add(getApplicationContext(), AUTHOR_US, photos, photoUris);
             if (failIndex != -1) {
                 // XXX Failure point
                 couldntReadPhoto(failIndex);

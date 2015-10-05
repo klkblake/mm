@@ -26,6 +26,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 
+import static com.klkblake.mm.Message.*;
+
 /**
  * Created by kyle on 1/10/15.
  */
@@ -35,10 +37,10 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
     private ArrayList<Message> messages = new ArrayList<>();
 
     {
-        messages.add(new Message(0, "user1", "How are you?"));
-        messages.add(new Message(1, "user2", "I am good, thank you! I slept very well"));
-        messages.add(new Message(2, "user2", "How about you?"));
-        messages.add(new Message(3, "user1", "I slept reasonably well too."));
+        messages.add(new Message(0, AUTHOR_THEM, "How are you?"));
+        messages.add(new Message(1, AUTHOR_US, "I am good, thank you! I slept very well"));
+        messages.add(new Message(2, AUTHOR_US, "How about you?"));
+        messages.add(new Message(3, AUTHOR_THEM, "I slept reasonably well too."));
     }
 
     public MessageListAdapter(File cacheDir) {
@@ -87,9 +89,9 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                     view = new TextView(context);
                 }
                 int color = 0;
-                if (message.author.equals("user2")) {
+                if (message.author == AUTHOR_US) {
                     color = 0xffffaaaa;
-                } else if (message.author.equals(("user1"))) {
+                } else if (message.author == AUTHOR_THEM) {
                     color = 0xffaaffaa;
                 }
                 ColorStateList textColor;
@@ -236,12 +238,12 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
         notifyDataSetChanged();
     }
 
-    public void add(String author, String message) {
+    public void add(int author, String message) {
         add(new Message(messages.size(), author, message));
     }
 
     // TODO should we even be doing this processing here?
-    public void add(Context context, String author, Bitmap photo, File photoFile) {
+    public void add(Context context, int author, Bitmap photo, File photoFile) {
         int messageId = messages.size();
         photosDir.mkdir();
         if (!photosDir.isDirectory()) {
@@ -257,7 +259,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
     }
 
     // Returns -1 on success, or else the index of the photo that failed.
-    public int add(Context context, String author, Bitmap[] photos, Uri[] photoUris) {
+    public int add(Context context, int author, Bitmap[] photos, Uri[] photoUris) {
         int messageId = messages.size();
         photosDir.mkdir();
         if (!photosDir.isDirectory()) {
