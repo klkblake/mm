@@ -17,8 +17,4 @@ public class Util {
         float b = (color & 0xff) / 255.0f;
         return (float) Math.sqrt(0.299*r*r + 0.587*g*g + 0.114*b*b);
     }
-
-    public static Uri getUriForFile(Context context, File file) {
-        return FileProvider.getUriForFile(context, "com.klkblake.mm.fileprovider", file);
-    }
 }

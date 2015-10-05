@@ -28,6 +28,7 @@ public class AlbumActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        App.onActivityCreate(this);
         setContentView(R.layout.activity_album);
         ArrayList<Uri> uris = getIntent().getParcelableArrayListExtra(EXTRA_PHOTO_URIS);
         photoUris = uris.toArray(new Uri[uris.size()]);

@@ -1,6 +1,5 @@
 package com.klkblake.mm;
 
-import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.ColorStateList;
@@ -24,7 +23,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 
 import static com.klkblake.mm.Message.*;
 
@@ -97,9 +95,9 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                 ColorStateList textColor;
                 // "Dark" and "Light" in these color names refer to the themes they are part of
                 if (Util.perceivedBrightness(color) < 0.5f) {
-                    textColor = context.getResources().getColorStateList(R.color.abc_primary_text_material_dark);
+                    textColor = App.resources.getColorStateList(R.color.abc_primary_text_material_dark);
                 } else {
-                    textColor = context.getResources().getColorStateList(R.color.abc_primary_text_material_light);
+                    textColor = App.resources.getColorStateList(R.color.abc_primary_text_material_light);
                 }
                 view.setBackgroundColor(color);
                 view.setTextColor(textColor);
@@ -119,9 +117,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                         Intent intent = new Intent(Intent.ACTION_VIEW);
                         intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         intent.setDataAndType(message.photoUris[0], "image/jpeg");
-                        if (intent.resolveActivity(v.getContext().getPackageManager()) != null) {
-                            v.getContext().startActivity(intent);
-                        }
+                        App.tryStartActivity(intent);
                     }
                 });
                 return view;
@@ -197,14 +193,9 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                     @Override
                     public void onClick(View v) {
                         // FIXME do properly
-                        //Intent intent = new Intent(Intent.ACTION_VIEW);
-                        //intent.setDataAndType(message.photoUris[0], "image/jpeg");
-                        //if (intent.resolveActivity(v.getContext().getPackageManager()) != null) {
-                        //    v.getContext().startActivity(intent);
-                        //}
-                        Intent intent = new Intent(v.getContext(), AlbumActivity.class);
+                        Intent intent = new Intent(App.context, AlbumActivity.class);
                         intent.putExtra(AlbumActivity.EXTRA_PHOTO_URIS, new ArrayList<>(Arrays.asList(message.photoUris)));
-                        v.getContext().startActivity(intent);
+                        App.startActivity(intent);
                     }
                 });
                 return view;
@@ -243,7 +234,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
     }
 
     // TODO should we even be doing this processing here?
-    public void add(Context context, int author, Bitmap photo, File photoFile) {
+    public void add(int author, Bitmap photo, File photoFile) {
         int messageId = messages.size();
         photosDir.mkdir();
         if (!photosDir.isDirectory()) {
@@ -255,11 +246,11 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
             // XXX Failure point
             throw new RuntimeException("Failed to rename " + photoFile + " to " + photoDestFile);
         }
-        add(new Message(messageId, author, photo, Util.getUriForFile(context, photoDestFile)));
+        add(new Message(messageId, author, photo, App.getUriForFile(photoDestFile)));
     }
 
     // Returns -1 on success, or else the index of the photo that failed.
-    public int add(Context context, int author, Bitmap[] photos, Uri[] photoUris) {
+    public int add(int author, Bitmap[] photos, Uri[] photoUris) {
         int messageId = messages.size();
         photosDir.mkdir();
         if (!photosDir.isDirectory()) {
@@ -277,7 +268,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
         for (int i = 0; i < photoUris.length; i++) {
             try {
                 File photoFile = new File(messageDir, Integer.toString(i) + ".jpg");
-                InputStream stream = context.getContentResolver().openInputStream(photoUris[i]);
+                InputStream stream = App.openInputStream(photoUris[i]);
                 OutputStream out = new FileOutputStream(photoFile);
                 while (true) {
                     int read = stream.read(buffer);
@@ -287,7 +278,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                     out.write(buffer, 0, read);
                 }
                 out.close();
-                newPhotoUris[i] = Util.getUriForFile(context, photoFile);
+                newPhotoUris[i] = App.getUriForFile(photoFile);
             } catch (IOException e) {
                 // XXX Failure point
                 return i;
