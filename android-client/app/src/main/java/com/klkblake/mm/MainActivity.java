@@ -1,11 +1,14 @@
 package com.klkblake.mm;
 
 import android.content.ClipData;
+import android.content.ComponentName;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.provider.MediaStore;
 import android.support.design.widget.FloatingActionButton;
 import android.text.Editable;
@@ -21,25 +24,29 @@ import java.io.File;
 import java.io.FileNotFoundException;
 
 
-public class MainActivity extends AppActivity {
+public class MainActivity extends AppActivity implements ServiceConnection {
     private static final int REQUEST_TAKE_PHOTO = 1;
     private static final int REQUEST_SELECT_PHOTOS = 2;
+
+    private MessageService.Binder service = null;
     private ListView messageList;
     private EditText composeText;
     private FloatingActionButton sendButton;
     private MessageListAdapter messages;
-    private File photoFile;
+    private String tempPhotoPath;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        File cacheDir = getCacheDir();
-        photoFile = new File(cacheDir, "photo.jpg");
         setContentView(R.layout.activity_main);
         messageList = (ListView) findViewById(R.id.messageList);
         composeText = (EditText) findViewById(R.id.composeText);
         sendButton = (FloatingActionButton) findViewById(R.id.sendButton);
-        messages = new MessageListAdapter(cacheDir);
+
+        File cacheDir = getCacheDir();
+        tempPhotoPath = cacheDir.getPath() + "/photo.jpg";
+
+        messages = new MessageListAdapter(messageList);
         messageList.setAdapter(messages);
         composeText.addTextChangedListener(new TextWatcher() {
             @Override
@@ -55,6 +62,10 @@ public class MainActivity extends AppActivity {
                 sendButton.setEnabled(s.toString().trim().length() != 0);
             }
         });
+
+        Intent intent = new Intent(App.context, MessageService.class);
+        startService(intent);
+        bindService(intent, this, BIND_IMPORTANT | BIND_ABOVE_CLIENT);
     }
 
     @Override
@@ -79,27 +90,53 @@ public class MainActivity extends AppActivity {
         return super.onOptionsItemSelected(item);
     }
 
+    @Override
+    public void onServiceConnected(ComponentName name, IBinder service) {
+        this.service = (MessageService.Binder) service;
+        messages.onServiceConnected(this.service);
+    }
+
+    @Override
+    public void onServiceDisconnected(ComponentName name) {
+        // We are completely useless if we can't access the service -- we can't even scroll the list
+        // view! So we bail.
+        throw new RuntimeException("MessageService was killed");
+    }
+
     public void sendMessage(View view) {
+        if (service == null) {
+            notifyServiceNotConnected();
+            return;
+        }
         Editable textContent = composeText.getText();
         String text = textContent.toString().trim();
         if (text.length() == 0) {
             return;
         }
-        messages.add(System.currentTimeMillis(), MessageListAdapter.AUTHOR_US, text);
+        service.sendMessage(text);
         textContent.clear();
     }
 
     public void takePhoto(View view) {
+        if (service == null) {
+            notifyServiceNotConnected();
+            return;
+        }
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         intent.setFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-        intent.putExtra(MediaStore.EXTRA_OUTPUT, App.getUriForFile(photoFile));
+        intent.putExtra(MediaStore.EXTRA_OUTPUT, App.getUriForPath(tempPhotoPath));
         if (intent.resolveActivity(getPackageManager()) != null) {
             startActivityForResult(intent, REQUEST_TAKE_PHOTO);
         }
     }
 
     public void selectPhotos(View view) {
+        if (service == null) {
+            notifyServiceNotConnected();
+            return;
+        }
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        // TODO we need to make sure we actually handle PNGs at least
         intent.setType("image/*");
         intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
@@ -111,14 +148,13 @@ public class MainActivity extends AppActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == REQUEST_TAKE_PHOTO && resultCode == RESULT_OK) {
-            String photoPath = photoFile.toString();
             BitmapFactory.Options options = new BitmapFactory.Options();
             options.inJustDecodeBounds = true;
-            BitmapFactory.decodeFile(photoPath, options);
+            BitmapFactory.decodeFile(tempPhotoPath, options);
             options.inJustDecodeBounds = false;
             options.inSampleSize = options.outWidth / messageList.getWidth();
-            Bitmap photo = BitmapFactory.decodeFile(photoPath, options);
-            messages.add(System.currentTimeMillis(), MessageListAdapter.AUTHOR_US, photo, photoFile);
+            Bitmap photo = BitmapFactory.decodeFile(tempPhotoPath, options);
+            service.sendMessage(photo, tempPhotoPath);
         }
         if (requestCode == REQUEST_SELECT_PHOTOS && resultCode == RESULT_OK) {
             ClipData selected = data.getClipData();
@@ -165,13 +201,17 @@ public class MainActivity extends AppActivity {
                     return;
                 }
             }
-            int failIndex = messages.add(System.currentTimeMillis(), MessageListAdapter.AUTHOR_US, photos, photoUris);
+            int failIndex = service.sendMessage(photos, photoUris);
             if (failIndex != -1) {
                 // XXX Failure point
                 couldntReadPhoto(failIndex);
                 return;
             }
         }
+    }
+
+    private void notifyServiceNotConnected() {
+        Toast.makeText(App.context, "The service is not yet available.", Toast.LENGTH_SHORT).show();
     }
 
     private void couldntReadPhoto(int i) {

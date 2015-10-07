@@ -1,8 +1,5 @@
 package com.klkblake.mm;
 
-import java.io.File;
-import java.util.ArrayList;
-
 import android.app.Fragment;
 import android.app.FragmentManager;
 import android.content.Intent;
@@ -28,11 +25,11 @@ public class PhotosActivity extends AppActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_photos);
         Intent intent = getIntent();
-        File photoDir = (File) intent.getSerializableExtra(EXTRA_PHOTO_DIR);
+        String photoDir = intent.getStringExtra(EXTRA_PHOTO_DIR);
         int count = intent.getIntExtra(EXTRA_PHOTO_COUNT, 0);
         photoUris = new Uri[count];
         for (int i = 0; i < count; i++) {
-            photoUris[i] = App.getUriForFile(new File(photoDir, i + ".jpg"));
+            photoUris[i] = App.getUriForPath(photoDir + "/" + i + ".jpg");
         }
         PhotosPagerAdapter adapter = new PhotosPagerAdapter(getFragmentManager());
         pager = (ViewPager) findViewById(R.id.pager);

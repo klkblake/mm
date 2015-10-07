@@ -12,81 +12,78 @@ import android.widget.AbsListView;
 import android.widget.BaseAdapter;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.ListView;
 import android.widget.TableLayout;
 import android.widget.TableRow;
 import android.widget.TextView;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.Arrays;
+import static com.klkblake.mm.MessageService.TYPE_PHOTOS_LOADED;
+import static com.klkblake.mm.MessageService.TYPE_TEXT;
 
 /**
  * Created by kyle on 1/10/15.
  */
 public class MessageListAdapter extends BaseAdapter implements AbsListView.RecyclerListener {
-    public static final int TYPE_SHIFT = 29;
-    public static final int INDEX_MASK = (1 << TYPE_SHIFT) - 1;
     public static final int MAX_PREVIEW_PHOTOS = 9;
-    public static final boolean AUTHOR_US = true;
-    public static final boolean AUTHOR_THEM = false;
-    public static final int TYPE_PENDING = 0;
-    public static final int TYPE_TEXT = 1;
-    public static final int TYPE_PHOTOS_UNLOADED = 2;
-    public static final int TYPE_PHOTOS_LOADED = 3; // Must be last
 
-    private int messageIDStart;
-    private LongArray timestamps = new LongArray();
-    private BooleanArray authors = new BooleanArray();
-    private IntArray indexes = new IntArray();
-    // Type 0 - Text
-    private ArrayList<String> texts = new ArrayList<>(); // TODO manual string alloc
-    // Type 1 - Loaded photos
-    private ArrayList<Bitmap[]> photos = new ArrayList<>(); // XXX This is Not Ok
-    private ShortArray loadedPhotoCounts = new ShortArray();
-    // Type 2 - Unloaded photos
-    private ShortArray unloadedPhotoCounts = new ShortArray();
-    // Type 3 - Pending content
-    // TODO implement pending data
-    private final File photosDir;
-    //private ArrayList<Message> messages = new ArrayList<>();
+    private ListView listView;
+    private MessageService.Binder service = null;
+    private String photosDir;
+    private int messageIDStart = 0;
+    private int messageCount = 0;
 
-    {
-        add(0,   AUTHOR_THEM, "How are you?");
-        add(3,   AUTHOR_US,   "I am good, thank you! I slept very well");
-        add(42,  AUTHOR_US,   "How about you?");
-        add(128, AUTHOR_THEM, "I slept reasonably well too.");
+    public MessageListAdapter(ListView listView) {
+        this.listView = listView;
     }
 
-    public MessageListAdapter(File cacheDir) {
-        photosDir = new File(cacheDir, "photos");
+    public void onServiceConnected(MessageService.Binder service) {
+        this.service = service;
+        service.addAdapter(this);
+        photosDir = service.getPhotosDir();
+    }
+
+    public void updateLoadedRange(final int newMessageIDStart, final int newMessageCount) {
+        listView.post(new Runnable() {
+            @Override
+            public void run() {
+                int position = listView.getFirstVisiblePosition();
+                View view = listView.getChildAt(0);
+                int top = 0;
+                if (view != null) {
+                    top = view.getTop();
+                    position += messageIDStart - newMessageIDStart;
+                }
+                messageIDStart = newMessageIDStart;
+                messageCount = newMessageCount;
+                notifyDataSetChanged();
+                if (view != null) {
+                    listView.setSelectionFromTop(position, top);
+                }
+            }
+        });
     }
 
     @Override
     public int getCount() {
-        return timestamps.count;
+        return messageCount;
     }
 
     @Override
     public Object getItem(int position) {
-        throw new RuntimeException("What the hell do we even do here?"); // XXX figure this out
+        return null;
     }
 
     @Override
     public long getItemId(int position) {
-        return messageIDStart + position;
+        return 0;
     }
 
     @Override
     public int getItemViewType(int position) {
-        int indexEntry = indexes.data[position];
-        int type = indexEntry >> TYPE_SHIFT;
+        int messageID = messageIDStart + position;
+        int type = service.getType(messageID);
         if (type == TYPE_PHOTOS_LOADED) {
-            int index = indexEntry & INDEX_MASK;
-            int photoCount = loadedPhotoCounts.data[index];
+            int photoCount = service.getLoadedPhotoCount(messageID);
             if (photoCount > MAX_PREVIEW_PHOTOS) {
                 photoCount = MAX_PREVIEW_PHOTOS + 1;
             }
@@ -102,10 +99,10 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
 
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
-        boolean author = authors.data[position];
-        int indexEntry = indexes.data[position];
-        int type = indexEntry >> TYPE_SHIFT;
-        int index = indexEntry & INDEX_MASK;
+        int messageID = messageIDStart + position;
+        boolean author = service.getAuthor(messageID);
+        int type = service.getType(messageID);
+        //XXX int index = service.getIndex(messageID);
         Context context = parent.getContext();
         switch (type) {
             case TYPE_TEXT: {
@@ -115,7 +112,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                 }
                 int color;
                 // TODO actually look up author colors
-                if (author == AUTHOR_US) {
+                if (author == Message.AUTHOR_US) {
                     color = 0xffffaaaa;
                 } else {
                     color = 0xffaaffaa;
@@ -129,14 +126,14 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                 }
                 view.setBackgroundColor(color);
                 view.setTextColor(textColor);
-                view.setText(texts.get(index));
+                view.setText(service.getText(messageID));
                 return view;
             }
             case TYPE_PHOTOS_LOADED: {
                 // TODO share from contextual menu on long press
-                Bitmap[] previewPhotos = photos.get(index);
+                Bitmap[] previewPhotos = service.getPhotos(messageID);
                 int previewCount = previewPhotos.length;
-                final int count = loadedPhotoCounts.data[index];
+                final int count = service.getLoadedPhotoCount(messageID);
                 if (count == 1) {
                     ImageView view = (ImageView) convertView;
                     if (view == null) {
@@ -144,7 +141,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                     }
                     view.setImageBitmap(previewPhotos[0]);
                     view.setAdjustViewBounds(true);
-                    final Uri uri = App.getUriForFile(new File(photosDir, (messageIDStart + position) + ".jpg"));
+                    final Uri uri = App.getUriForPath(photosDir + "/" + (messageIDStart + position) + ".jpg");
                     view.setOnClickListener(new View.OnClickListener() {
                         @Override
                         public void onClick(View v) {
@@ -219,7 +216,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                         entry.setImageBitmap(previewPhotos[photoIndex++]);
                     }
                 }
-                final File messageDir = new File(photosDir, Integer.toString(messageIDStart + position));
+                final String messageDir = photosDir + "/" + (messageIDStart + position);
                 view.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
@@ -253,87 +250,5 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                 }
             }
         }
-    }
-
-    private void add(long timestamp, boolean author, int type, int index) {
-        timestamps.add(timestamp);
-        authors.add(author);
-        indexes.add(type << TYPE_SHIFT | index & INDEX_MASK);
-        notifyDataSetChanged();
-    }
-
-    public void add(long timestamp, boolean author, String message) {
-        texts.add(message);
-        add(timestamp, author, TYPE_TEXT, texts.size() - 1);
-    }
-
-    // TODO should we even be doing this processing here? No, no we should not
-    public void add(long timestamp, boolean author, Bitmap photo, File photoFile) {
-        int messageId = messageIDStart + timestamps.count;
-        photosDir.mkdir();
-        if (!photosDir.isDirectory()) {
-            // XXX Failure point
-            throw new RuntimeException("Directory " + photosDir + " doesn't exist?");
-        }
-        File photoDestFile = new File(photosDir, messageId + ".jpg");
-        if (!photoFile.renameTo(photoDestFile)) {
-            // XXX Failure point
-            throw new RuntimeException("Failed to rename " + photoFile + " to " + photoDestFile);
-        }
-        photos.add(new Bitmap[]{photo});
-        loadedPhotoCounts.add((short) 1);
-        add(timestamp, author, TYPE_PHOTOS_LOADED, photos.size() - 1);
-    }
-
-    // Returns -1 on success, or else the index of the photo that failed.
-    // XXX This is seriously redundant with the previous method
-    public int add(long timestamp, boolean author, Bitmap[] photos, Uri[] photoUris) {
-        // XXX Gack! This is *wrong* for single photos!
-        int messageId = messageIDStart + timestamps.count;
-        photosDir.mkdir();
-        if (!photosDir.isDirectory()) {
-            // XXX Failure point
-            throw new RuntimeException("Could not create directory " + photosDir);
-        }
-        File messageDir = null;
-        if (photos.length > 1) {
-            messageDir = new File(photosDir, Integer.toString(messageId));
-            messageDir.mkdir();
-            if (!messageDir.isDirectory()) {
-                // XXX Failure point
-                throw new RuntimeException("Could not create directory " + messageDir);
-            }
-        }
-        Uri[] newPhotoUris = new Uri[photoUris.length];
-        byte[] buffer = new byte[64*1024];
-        for (int i = 0; i < photoUris.length; i++) {
-            try {
-                File photoFile;
-                if (photos.length > 1) {
-                    photoFile = new File(messageDir, i + ".jpg");
-                } else {
-                    photoFile = new File(photosDir, messageId + ".jpg");
-                }
-                InputStream stream = App.openInputStream(photoUris[i]);
-                OutputStream out = new FileOutputStream(photoFile);
-                while (true) {
-                    int read = stream.read(buffer);
-                    if (read == -1) {
-                        break;
-                    }
-                    out.write(buffer, 0, read);
-                }
-                out.close();
-                newPhotoUris[i] = App.getUriForFile(photoFile);
-            } catch (IOException e) {
-                // XXX Failure point
-                return i;
-            }
-        }
-        this.photos.add(photos);
-        // XXX Enforce the limit!
-        loadedPhotoCounts.add((short) photoUris.length);
-        add(timestamp, author, TYPE_PHOTOS_LOADED, this.photos.size() - 1);
-        return -1;
     }
 }

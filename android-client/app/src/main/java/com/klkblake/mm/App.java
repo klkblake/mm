@@ -8,7 +8,6 @@ import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.net.Uri;
 import android.support.v4.content.FileProvider;
-import android.view.View;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -41,6 +40,10 @@ public class App {
 
     public static Uri getUriForFile(File file) {
         return FileProvider.getUriForFile(context, "com.klkblake.mm.fileprovider", file);
+    }
+
+    public static Uri getUriForPath(String path) {
+        return getUriForFile(new File(path));
     }
 
     public static boolean canStartActivity(Intent intent) {
