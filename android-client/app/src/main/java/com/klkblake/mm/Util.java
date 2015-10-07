@@ -1,5 +1,7 @@
 package com.klkblake.mm;
 
+import java.nio.charset.StandardCharsets;
+
 /**
  * Created by kyle on 5/10/15.
  */
@@ -13,5 +15,13 @@ public class Util {
 
     public static void impossible(Throwable e) {
         throw new RuntimeException("Not quite as impossible as anticipated", e);
+    }
+
+    public static byte[] utf8Encode(String str) {
+        return str.getBytes(StandardCharsets.UTF_8);
+    }
+
+    public static String utf8Decode(byte[] bytes) {
+        return new String(bytes, StandardCharsets.UTF_8);
     }
 }

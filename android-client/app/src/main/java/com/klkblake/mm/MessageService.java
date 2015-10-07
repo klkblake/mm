@@ -11,9 +11,13 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.ConcurrentLinkedQueue;
+
+import static com.klkblake.mm.Util.utf8Decode;
+import static com.klkblake.mm.Util.utf8Encode;
 
 public final class MessageService extends Service implements Runnable {
     public static final int TYPE_SHIFT = 29;
@@ -35,7 +39,7 @@ public final class MessageService extends Service implements Runnable {
     BooleanArray authors = new BooleanArray();
     IntArray indexes = new IntArray();
     // Type 0 - Text
-    ArrayList<String> texts = new ArrayList<>(); // TODO manual string alloc
+    ArrayList<byte[]> texts = new ArrayList<>(); // TODO manual string alloc
     // Type 1 - Loaded photos
     ArrayList<Bitmap[]> photos = new ArrayList<>(); // XXX This is Not Ok. The UI should handle this
     ShortArray loadedPhotoCounts = new ShortArray();
@@ -63,7 +67,7 @@ public final class MessageService extends Service implements Runnable {
             timestamps.add(System.currentTimeMillis());
             authors.add(Message.AUTHOR_US);
             indexes.add(TYPE_TEXT << MessageService.TYPE_SHIFT | (texts.size()) & MessageService.INDEX_MASK);
-            texts.add(i + ": " + r.nextInt());
+            texts.add(utf8Encode(i + ": " + r.nextInt()));
         }
         binder.sendMessage("How are you?");
         binder.sendMessage("I am good, thank you! I slept very well");
@@ -151,7 +155,7 @@ public final class MessageService extends Service implements Runnable {
         }
 
         public String getText(int messageID) {
-            return texts.get(getIndex(messageID));
+            return utf8Decode(texts.get(getIndex(messageID)));
         }
 
         // XXX this shouldn't exist
@@ -174,7 +178,7 @@ public final class MessageService extends Service implements Runnable {
         }
 
         public void sendMessage(String message) {
-            texts.add(message);
+            texts.add(utf8Encode(message));
             sendMessage(MessageService.TYPE_TEXT, texts.size() - 1);
         }
 
