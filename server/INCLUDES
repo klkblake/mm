@@ -1,0 +1,15 @@
+This project uses a unity build. In other words, all files are included into a
+single translation unit. This reduces compile times and significantly reduces
+the amount of time spent messing with headers.
+
+<stdlib.h>
+<stdio.h>
+<stdbool.h>
+<assert.h>
+<string.h>
+common.h
+
+abcc:
+common.h
+abcc.h
+main.c

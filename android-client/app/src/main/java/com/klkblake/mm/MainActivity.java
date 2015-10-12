@@ -24,11 +24,12 @@ import java.io.File;
 import java.io.FileNotFoundException;
 
 
-public class MainActivity extends AppActivity implements ServiceConnection {
+public class MainActivity extends AppActivity {
     private static final int REQUEST_TAKE_PHOTO = 1;
     private static final int REQUEST_SELECT_PHOTOS = 2;
 
     private MessageService.Binder service = null;
+    private ServiceConnection serviceConnection;
     private ListView messageList;
     private EditText composeText;
     private FloatingActionButton sendButton;
@@ -65,7 +66,21 @@ public class MainActivity extends AppActivity implements ServiceConnection {
 
         Intent intent = new Intent(App.context, MessageService.class);
         startService(intent);
-        bindService(intent, this, BIND_IMPORTANT | BIND_ABOVE_CLIENT);
+        serviceConnection = new ServiceConnection() {
+            @Override
+            public void onServiceConnected(ComponentName name, IBinder service) {
+                MainActivity.this.service = (MessageService.Binder) service;
+                messages.onServiceConnected(MainActivity.this.service);
+            }
+
+            @Override
+            public void onServiceDisconnected(ComponentName name) {
+                // We are completely useless if we can't access the service -- we can't even scroll the list
+                // view! So we bail.
+                throw new RuntimeException("MessageService was killed");
+            }
+        };
+        bindService(intent, serviceConnection, BIND_IMPORTANT | BIND_ABOVE_CLIENT);
     }
 
     @Override
@@ -88,19 +103,6 @@ public class MainActivity extends AppActivity implements ServiceConnection {
         }
 
         return super.onOptionsItemSelected(item);
-    }
-
-    @Override
-    public void onServiceConnected(ComponentName name, IBinder service) {
-        this.service = (MessageService.Binder) service;
-        messages.onServiceConnected(this.service);
-    }
-
-    @Override
-    public void onServiceDisconnected(ComponentName name) {
-        // We are completely useless if we can't access the service -- we can't even scroll the list
-        // view! So we bail.
-        throw new RuntimeException("MessageService was killed");
     }
 
     public void sendMessage(View view) {
@@ -216,5 +218,11 @@ public class MainActivity extends AppActivity implements ServiceConnection {
 
     private void couldntReadPhoto(int i) {
         Toast.makeText(App.context, "Could not read photo " + (i + 1), Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        unbindService(serviceConnection);
     }
 }
