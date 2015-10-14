@@ -6,6 +6,18 @@ import java.nio.charset.StandardCharsets;
  * Created by kyle on 5/10/15.
  */
 public class Util {
+    public static int min(int a, int b) {
+        return a < b ? a : b;
+    }
+
+    public static int max(int a, int b) {
+        return a > b ? a : b;
+    }
+
+    public static int calculateSampleSize(int width, int height, int reqWidth, int reqHeight) {
+        return min(width / reqWidth, height / reqHeight);
+    }
+
     public static float perceivedBrightness(int color) {
         float r = ((color >> 16) & 0xff) / 255.0f;
         float g = ((color >> 8) & 0xff) / 255.0f;

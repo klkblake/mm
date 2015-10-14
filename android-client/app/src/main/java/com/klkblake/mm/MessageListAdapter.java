@@ -4,10 +4,14 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
+import android.graphics.Point;
 import android.net.Uri;
+import android.util.ArrayMap;
+import android.util.LruCache;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.AbsListView;
 import android.widget.BaseAdapter;
 import android.widget.FrameLayout;
@@ -17,13 +21,17 @@ import android.widget.TableLayout;
 import android.widget.TableRow;
 import android.widget.TextView;
 
-import static com.klkblake.mm.MessageService.TYPE_PHOTOS_LOADED;
+import java.util.ArrayDeque;
+
+import static com.klkblake.mm.MessageService.TYPE_PHOTOS;
 import static com.klkblake.mm.MessageService.TYPE_TEXT;
+import static com.klkblake.mm.Util.max;
+import static com.klkblake.mm.Util.min;
 
 /**
  * Created by kyle on 1/10/15.
  */
-public class MessageListAdapter extends BaseAdapter implements AbsListView.RecyclerListener {
+public class MessageListAdapter extends BaseAdapter implements AbsListView.RecyclerListener, Runnable {
     public static final int MAX_PREVIEW_PHOTOS = 9;
 
     private ListView listView;
@@ -32,8 +40,41 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
     private int messageIDStart = 0;
     private int messageCount = 0;
 
+    private Thread loaderThread = new Thread(this, "Image loader");
+    private final ArrayDeque<ImageLoadRequest> loadImageRequests = new ArrayDeque<>();
+    // TODO replace this with a time based system?
+    private LruCache<ImageLoadRequest, Bitmap> imageCache;
+    // XXX getView can be called for existing views and the result discarded!
+    private ArrayMap<ImageLoadRequest, ImageView> imageViews = new ArrayMap<>();
+    private final Runnable notifyDataSetChanged = new Runnable() {
+        @Override
+        public void run() {
+            notifyDataSetChanged();
+        }
+    };
+
     public MessageListAdapter(ListView listView) {
         this.listView = listView;
+        WindowManager wm = (WindowManager) App.context.getSystemService(Context.WINDOW_SERVICE);
+        Point size = new Point();
+        wm.getDefaultDisplay().getSize(size);
+        int numBoxes;
+        if (size.x < size.y) {
+            // Portrait
+            numBoxes = size.y / size.x + 2;
+        } else {
+            // Landscape or square
+            numBoxes = 3;
+        }
+        int pixels = numBoxes * size.x * size.x;
+        // TODO make excess size configurable
+        imageCache = new LruCache<ImageLoadRequest, Bitmap>(pixels * 4 + 8 * 1024 * 1024) {
+            @Override
+            protected int sizeOf(ImageLoadRequest key, Bitmap value) {
+                return value.getByteCount();
+            }
+        };
+        loaderThread.start();
     }
 
     public void onServiceConnected(MessageService.Binder service) {
@@ -82,7 +123,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
     public int getItemViewType(int position) {
         int messageID = messageIDStart + position;
         int type = service.getType(messageID);
-        if (type == TYPE_PHOTOS_LOADED) {
+        if (type == TYPE_PHOTOS) {
             int photoCount = service.getLoadedPhotoCount(messageID);
             if (photoCount > MAX_PREVIEW_PHOTOS) {
                 photoCount = MAX_PREVIEW_PHOTOS + 1;
@@ -94,7 +135,64 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
 
     @Override
     public int getViewTypeCount() {
-        return TYPE_PHOTOS_LOADED + MAX_PREVIEW_PHOTOS + 1;
+        return TYPE_PHOTOS + MAX_PREVIEW_PHOTOS + 1;
+    }
+
+    @Override
+    public void run() {
+        while (true) {
+            boolean loadedAnImage = false;
+            while (true) {
+                final ImageLoadRequest request;
+                synchronized (loadImageRequests) {
+                    request = loadImageRequests.peek();
+                    if (request == null) {
+                        break;
+                    }
+                }
+                String path;
+                if (request.isSingle) {
+                    path = photosDir + "/" + request.message + ".jpg";
+                } else {
+                    path = photosDir + "/" + request.message + "/" + request.part + ".jpg";
+                }
+                final Bitmap bitmap = App.decodeSampledBitmap(path, request.reqWidth, request.reqHeight);
+                // TODO handle decode fail
+                imageCache.put(request, bitmap);
+                loadImageRequests.remove();
+                loadedAnImage = true;
+            }
+            if (loadedAnImage) {
+                listView.post(notifyDataSetChanged);
+            }
+            synchronized (loadImageRequests) {
+                if (!loadImageRequests.isEmpty()) {
+                    continue;
+                }
+                try {
+                    loadImageRequests.wait();
+                } catch (InterruptedException e) {
+                    Util.impossible(e);
+                }
+            }
+        }
+    }
+
+    private void loadImageBitmap(int messageID, int part, ImageView view, boolean isSingle, int size) {
+        ImageLoadRequest request = new ImageLoadRequest(messageID, part, isSingle, size, size);
+        Bitmap bitmap = imageCache.get(request);
+        if (bitmap != null) {
+            view.setImageBitmap(bitmap);
+            return;
+        }
+        imageViews.put(request, view);
+        synchronized (loadImageRequests) {
+            if (!loadImageRequests.contains(request)) {
+                loadImageRequests.add(request);
+                loadImageRequests.notify();
+            }
+        }
+        view.setImageDrawable(null);
     }
 
     @Override
@@ -102,7 +200,6 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
         int messageID = messageIDStart + position;
         boolean author = service.getAuthor(messageID);
         int type = service.getType(messageID);
-        //XXX int index = service.getIndex(messageID);
         Context context = parent.getContext();
         switch (type) {
             case TYPE_TEXT: {
@@ -129,19 +226,18 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                 view.setText(service.getText(messageID));
                 return view;
             }
-            case TYPE_PHOTOS_LOADED: {
+            case TYPE_PHOTOS: {
                 // TODO share from contextual menu on long press
-                Bitmap[] previewPhotos = service.getPhotos(messageID);
-                int previewCount = previewPhotos.length;
                 final int count = service.getLoadedPhotoCount(messageID);
+                int previewCount = min(count, MAX_PREVIEW_PHOTOS);
                 if (count == 1) {
                     ImageView view = (ImageView) convertView;
                     if (view == null) {
-                        view = new ImageView(context);
+                        view = new SquareImageView(context);
+                        view.setMinimumWidth(listView.getWidth());
                     }
-                    view.setImageBitmap(previewPhotos[0]);
-                    view.setAdjustViewBounds(true);
-                    final Uri uri = App.getUriForPath(photosDir + "/" + (messageIDStart + position) + ".jpg");
+                    loadImageBitmap(messageID, 0, view, true, listView.getWidth());
+                    final Uri uri = App.getUriForPath(photosDir + "/" + messageID + ".jpg");
                     view.setOnClickListener(new View.OnClickListener() {
                         @Override
                         public void onClick(View v) {
@@ -179,7 +275,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                         for (int columnIndex = 0; columnIndex < columns; columnIndex++) {
                             View entry;
                             ImageView image = new SquareImageView(context);
-                            image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+                            image.setMinimumWidth(listView.getWidth() / columns);
                             if (photoIndex++ == MAX_PREVIEW_PHOTOS - 1 && overflow) {
                                 FrameLayout frame = new FrameLayout(context);
                                 frame.addView(image);
@@ -201,6 +297,8 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                         view.addView(row);
                     }
                 }
+                int columns = ((TableRow) view.getChildAt(0)).getChildCount();
+                int entryWidth = listView.getWidth() / columns;
                 int photoIndex = 0;
                 for (int rowIndex = 0; rowIndex < view.getChildCount(); rowIndex++) {
                     TableRow row = (TableRow) view.getChildAt(rowIndex);
@@ -213,10 +311,10 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                         } else {
                             entry = (ImageView) row.getChildAt(columnIndex);
                         }
-                        entry.setImageBitmap(previewPhotos[photoIndex++]);
+                        loadImageBitmap(messageID, photoIndex++, entry, false, entryWidth);
                     }
                 }
-                final String messageDir = photosDir + "/" + (messageIDStart + position);
+                final String messageDir = photosDir + "/" + messageID;
                 view.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
@@ -232,23 +330,105 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
         throw new AssertionError("Invalid/unimplemented message type: " + type);
     }
 
+    private void removeImageView(ImageView imageView) {
+        for (int i = 0; i < imageViews.size(); i++) {
+            if (imageViews.valueAt(i) == imageView) {
+                imageViews.removeAt(i);
+                return;
+            }
+        }
+        imageView.setImageBitmap(null);
+    }
+
     @Override
     public void onMovedToScrapHeap(View view) {
         if (view instanceof ImageView) {
-            ((ImageView) view).setImageBitmap(null);
+            // TODO add to image cache
+            ImageView imageView = (ImageView) view;
+            removeImageView(imageView);
         } else if (view instanceof TableLayout) {
             TableLayout table = (TableLayout) view;
             for (int rowIndex = 0; rowIndex < table.getChildCount(); rowIndex++) {
                 TableRow row = (TableRow) table.getChildAt(rowIndex);
                 for (int columnIndex = 0; columnIndex < row.getChildCount(); columnIndex++) {
                     View entry = row.getChildAt(columnIndex);
+                    ImageView imageView;
                     if (entry instanceof ImageView) {
-                        ((ImageView) entry).setImageBitmap(null);
+                        imageView = (ImageView) entry;
                     } else if (entry instanceof FrameLayout) {
-                        ((ImageView) ((FrameLayout) entry).getChildAt(0)).setImageBitmap(null);
+                        imageView = (ImageView) ((FrameLayout) entry).getChildAt(0);
+                    } else {
+                        throw new AssertionError("Entry not an instance of an appropriate class?");
                     }
+                    removeImageView(imageView);
                 }
             }
+        }
+    }
+
+    class MessagePart {
+        public int message;
+        public int part;
+
+        public MessagePart(int message, int part) {
+            this.message = message;
+            this.part = part;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            MessagePart that = (MessagePart) o;
+
+            return message == that.message && part == that.part;
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * message + part;
+        }
+    }
+
+    class ImageLoadRequest {
+        public final int message;
+        public final int part;
+        public final boolean isSingle;
+        public final int reqWidth;
+        public final int reqHeight;
+
+        public ImageLoadRequest(int message, int part, boolean isSingle, int reqWidth, int reqHeight) {
+            this.message = message;
+            this.part = part;
+            this.isSingle = isSingle;
+            this.reqWidth = reqWidth;
+            this.reqHeight = reqHeight;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            ImageLoadRequest that = (ImageLoadRequest) o;
+
+            return (message == that.message &&
+                    part == that.part &&
+                    isSingle == that.isSingle &&
+                    reqWidth == that.reqWidth &&
+                    reqHeight == that.reqHeight);
+
+        }
+
+        @Override
+        public int hashCode() {
+            int result = message;
+            result = 31 * result + part;
+            result = 31 * result + (isSingle ? 1 : 0);
+            result = 31 * result + reqWidth;
+            result = 31 * result + reqHeight;
+            return result;
         }
     }
 }

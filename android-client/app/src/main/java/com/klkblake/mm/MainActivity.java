@@ -5,7 +5,6 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -13,6 +12,8 @@ import android.provider.MediaStore;
 import android.support.design.widget.FloatingActionButton;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.ArrayMap;
+import android.util.LruCache;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -21,7 +22,9 @@ import android.widget.ListView;
 import android.widget.Toast;
 
 import java.io.File;
-import java.io.FileNotFoundException;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
+import static com.klkblake.mm.App.decodeSampledBitmap;
 
 
 public class MainActivity extends AppActivity {
@@ -150,60 +153,21 @@ public class MainActivity extends AppActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == REQUEST_TAKE_PHOTO && resultCode == RESULT_OK) {
-            BitmapFactory.Options options = new BitmapFactory.Options();
-            options.inJustDecodeBounds = true;
-            BitmapFactory.decodeFile(tempPhotoPath, options);
-            options.inJustDecodeBounds = false;
-            options.inSampleSize = options.outWidth / messageList.getWidth();
-            Bitmap photo = BitmapFactory.decodeFile(tempPhotoPath, options);
-            service.sendMessage(photo, tempPhotoPath);
+            service.sendPhoto(tempPhotoPath);
         }
         if (requestCode == REQUEST_SELECT_PHOTOS && resultCode == RESULT_OK) {
             ClipData selected = data.getClipData();
-            int count;
-            Bitmap[] photos;
             Uri[] photoUris;
             if (selected == null) {
-                count = 1;
-                photos = new Bitmap[1];
-                photoUris = new Uri[1];
-                photoUris[0] = data.getData();
+                photoUris = new Uri[] { data.getData() };
             } else {
-                count = selected.getItemCount();
-                int numBitmaps = count;
-                if (numBitmaps > MessageListAdapter.MAX_PREVIEW_PHOTOS) {
-                    numBitmaps = MessageListAdapter.MAX_PREVIEW_PHOTOS;
-                }
-                photos = new Bitmap[numBitmaps];
+                int count = selected.getItemCount();
                 photoUris = new Uri[count];
                 for (int i = 0; i < count; i++) {
                     photoUris[i] = selected.getItemAt(i).getUri();
                 }
             }
-            int columns;
-            if (count == 1) {
-                columns = 1;
-            } else if (count <= 4) {
-                columns = 2;
-            } else {
-                columns = 3;
-            }
-            for (int i = 0; i < photos.length; i++) {
-                try {
-                    // TODO make this respect EXIF rotation
-                    BitmapFactory.Options options = new BitmapFactory.Options();
-                    options.inJustDecodeBounds = true;
-                    BitmapFactory.decodeStream(App.openInputStream(photoUris[i]), null, options);
-                    options.inJustDecodeBounds = false;
-                    options.inSampleSize = options.outWidth / messageList.getWidth() * columns;
-                    photos[i] = BitmapFactory.decodeStream(App.openInputStream(photoUris[i]), null, options);
-                } catch (FileNotFoundException e) {
-                    // XXX Failure point
-                    couldntReadPhoto(i);
-                    return;
-                }
-            }
-            int failIndex = service.sendMessage(photos, photoUris);
+            int failIndex = service.sendPhotos(photoUris);
             if (failIndex != -1) {
                 // XXX Failure point
                 couldntReadPhoto(failIndex);

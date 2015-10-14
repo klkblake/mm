@@ -11,7 +11,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -24,8 +23,7 @@ public final class MessageService extends Service implements Runnable {
     public static final int INDEX_MASK = (1 << TYPE_SHIFT) - 1;
     public static final int TYPE_PENDING = 0;
     public static final int TYPE_TEXT = 1;
-    public static final int TYPE_PHOTOS_UNLOADED = 2;
-    public static final int TYPE_PHOTOS_LOADED = 3; // Must be last
+    public static final int TYPE_PHOTOS = 2; // Must be last
 
     private Thread mainThread;
     private boolean die;
@@ -38,16 +36,14 @@ public final class MessageService extends Service implements Runnable {
     LongArray timestamps = new LongArray();
     BooleanArray authors = new BooleanArray();
     IntArray indexes = new IntArray();
-    // Type 0 - Text
-    ArrayList<byte[]> texts = new ArrayList<>(); // TODO manual string alloc
-    // Type 1 - Loaded photos
-    ArrayList<Bitmap[]> photos = new ArrayList<>(); // XXX This is Not Ok. The UI should handle this
-    ShortArray loadedPhotoCounts = new ShortArray();
-    // Type 2 - Unloaded photos
-    ShortArray unloadedPhotoCounts = new ShortArray();
-    // Type 3 - Pending content
+    // Type 0 - Pending content
     // TODO implement pending data
+    // Type 1 - Text
+    ArrayList<byte[]> texts = new ArrayList<>(); // TODO manual string alloc
+    // Type 2 - Photos
+    ShortArray photoCounts = new ShortArray();
 
+    final Object monitor = new Object();
     ConcurrentLinkedQueue<MessageListAdapter> newAdapters = new ConcurrentLinkedQueue<>();
     // Accessed by multiple threads
     ArrayList<MessageListAdapter> adapters = new ArrayList<>();
@@ -58,7 +54,7 @@ public final class MessageService extends Service implements Runnable {
     public void onCreate() {
         photosDir = getCacheDir() + "/photos";
         die = false;
-        mainThread = new Thread(this);
+        mainThread = new Thread(this, "Main service thread");
         mainThread.start();
 
         binder = new Binder();
@@ -99,12 +95,12 @@ public final class MessageService extends Service implements Runnable {
                     adapter.updateLoadedRange(messageIDStart, timestamps.count);
                 }
             }
-            synchronized (mainThread) {
+            synchronized (monitor) {
                 if (die || !newAdapters.isEmpty() || !messagesToSend.isEmpty()) {
                     continue;
                 }
                 try {
-                    mainThread.wait();
+                    monitor.wait();
                 } catch (InterruptedException e) {
                     Util.impossible(e);
                 }
@@ -120,8 +116,8 @@ public final class MessageService extends Service implements Runnable {
     public final class Binder extends android.os.Binder {
         public void addAdapter(MessageListAdapter adapter) {
             newAdapters.add(adapter);
-            synchronized (mainThread) {
-                mainThread.notify();
+            synchronized (monitor) {
+                monitor.notify();
             }
         }
         
@@ -158,13 +154,8 @@ public final class MessageService extends Service implements Runnable {
             return utf8Decode(texts.get(getIndex(messageID)));
         }
 
-        // XXX this shouldn't exist
-        public Bitmap[] getPhotos(int messageID) {
-            return photos.get(getIndex(messageID));
-        }
-
         public int getLoadedPhotoCount(int messageID) {
-            return loadedPhotoCounts.data[getIndex(messageID)];
+            return photoCounts.data[getIndex(messageID)];
         }
 
         private void sendMessage(int type, int index) {
@@ -172,8 +163,8 @@ public final class MessageService extends Service implements Runnable {
             authors.add(Message.AUTHOR_US);
             indexes.add(type << MessageService.TYPE_SHIFT | index & MessageService.INDEX_MASK);
             messagesToSend.add(true);
-            synchronized (mainThread) {
-                mainThread.notify();
+            synchronized (monitor) {
+                monitor.notify();
             }
         }
 
@@ -183,7 +174,7 @@ public final class MessageService extends Service implements Runnable {
         }
 
         // TODO should we even be doing this processing here?
-        public void sendMessage(Bitmap photo, String tempPhotoFile) {
+        public void sendPhoto(String tempPhotoFile) {
             int messageId = messageIDStart + timestamps.count;
             ensurePhotosDirExists();
             File photoDestFile = new File(photosDir, messageId + ".jpg");
@@ -191,19 +182,18 @@ public final class MessageService extends Service implements Runnable {
                 // XXX Failure point
                 throw new RuntimeException("Failed to rename " + tempPhotoFile + " to " + photoDestFile);
             }
-            photos.add(new Bitmap[]{photo});
-            loadedPhotoCounts.add((short) 1);
-            sendMessage(MessageService.TYPE_PHOTOS_LOADED, photos.size() - 1);
+            photoCounts.add((short) 1);
+            sendMessage(MessageService.TYPE_PHOTOS, photoCounts.count - 1);
         }
 
         // Returns -1 on success, or else the index of the photo that failed.
         // XXX This is seriously redundant with the previous method
-        public int sendMessage(Bitmap[] photoPreviews, Uri[] photoUris) {
+        public int sendPhotos(Uri[] photoUris) {
             // XXX Gack! This is *wrong* for single photos!
             int messageId = messageIDStart + timestamps.count;
             ensurePhotosDirExists();
             File messageDir = null;
-            if (photoPreviews.length > 1) {
+            if (photoUris.length > 1) {
                 messageDir = new File(photosDir, Integer.toString(messageId));
                 messageDir.mkdir();
                 if (!messageDir.isDirectory()) {
@@ -211,12 +201,11 @@ public final class MessageService extends Service implements Runnable {
                     throw new RuntimeException("Could not create directory " + messageDir);
                 }
             }
-            Uri[] newPhotoUris = new Uri[photoUris.length];
             byte[] buffer = new byte[64 * 1024];
             for (int i = 0; i < photoUris.length; i++) {
                 try {
                     String photoFile;
-                    if (photoPreviews.length > 1) {
+                    if (photoUris.length > 1) {
                         photoFile = messageDir + "/" + i + ".jpg";
                     } else {
                         photoFile = photosDir + "/" + messageId + ".jpg";
@@ -231,16 +220,14 @@ public final class MessageService extends Service implements Runnable {
                         out.write(buffer, 0, read);
                     }
                     out.close();
-                    newPhotoUris[i] = App.getUriForPath(photoFile);
                 } catch (IOException e) {
                     // XXX Failure point
                     return i;
                 }
             }
-            photos.add(photoPreviews);
             // XXX Enforce the limit!
-            loadedPhotoCounts.add((short) photoUris.length);
-            sendMessage(MessageService.TYPE_PHOTOS_LOADED, photos.size() - 1);
+            photoCounts.add((short) photoUris.length);
+            sendMessage(MessageService.TYPE_PHOTOS, photoCounts.count - 1);
             return -1;
         }
 
@@ -257,8 +244,8 @@ public final class MessageService extends Service implements Runnable {
     @Override
     public void onDestroy() {
         die = true;
-        synchronized (mainThread) {
-            mainThread.notify();
+        synchronized (monitor) {
+            monitor.notify();
         }
         try {
             mainThread.join();
