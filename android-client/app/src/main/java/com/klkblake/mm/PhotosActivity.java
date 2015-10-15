@@ -63,11 +63,7 @@ public class PhotosActivity extends AppActivity {
                 Intent intent = new Intent(Intent.ACTION_VIEW);
                 intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 intent.setDataAndType(photoUris[pager.getCurrentItem()], "image/jpeg");
-                // TODO decide whether to use a chooser here
                 startActivity(Intent.createChooser(intent, "View in"));
-                //if (intent.resolveActivity(getPackageManager()) != null) {
-                //    startActivity(intent);
-                //}
                 return true;
             }
             default: {

@@ -4,7 +4,6 @@ import android.content.ClipData;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.ServiceConnection;
-import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -12,8 +11,6 @@ import android.provider.MediaStore;
 import android.support.design.widget.FloatingActionButton;
 import android.text.Editable;
 import android.text.TextWatcher;
-import android.util.ArrayMap;
-import android.util.LruCache;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -22,9 +19,6 @@ import android.widget.ListView;
 import android.widget.Toast;
 
 import java.io.File;
-import java.util.concurrent.ConcurrentLinkedQueue;
-
-import static com.klkblake.mm.App.decodeSampledBitmap;
 
 
 public class MainActivity extends AppActivity {
@@ -33,7 +27,6 @@ public class MainActivity extends AppActivity {
 
     private MessageService.Binder service = null;
     private ServiceConnection serviceConnection;
-    private ListView messageList;
     private EditText composeText;
     private FloatingActionButton sendButton;
     private MessageListAdapter messages;
@@ -43,7 +36,7 @@ public class MainActivity extends AppActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        messageList = (ListView) findViewById(R.id.messageList);
+        ListView messageList = (ListView) findViewById(R.id.messageList);
         composeText = (EditText) findViewById(R.id.composeText);
         sendButton = (FloatingActionButton) findViewById(R.id.sendButton);
 
@@ -171,7 +164,6 @@ public class MainActivity extends AppActivity {
             if (failIndex != -1) {
                 // XXX Failure point
                 couldntReadPhoto(failIndex);
-                return;
             }
         }
     }
@@ -188,5 +180,6 @@ public class MainActivity extends AppActivity {
     protected void onDestroy() {
         super.onDestroy();
         unbindService(serviceConnection);
+        messages.onDestroy();
     }
 }

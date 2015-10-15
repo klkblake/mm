@@ -2,7 +2,7 @@ package com.klkblake.mm;
 
 import android.content.Context;
 import android.content.Intent;
-import android.content.res.ColorStateList;
+import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.net.Uri;
@@ -39,19 +39,18 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
     private String photosDir;
     private int messageIDStart = 0;
     private int messageCount = 0;
+    private int textColorLight, textColorDark;
 
-    private Thread loaderThread = new Thread(this, "Image loader");
     private final ArrayDeque<ImageLoadRequest> loadImageRequests = new ArrayDeque<>();
-    // TODO replace this with a time based system?
+    // TODO do we want to decode ahead of a scroll?
     private LruCache<ImageLoadRequest, Bitmap> imageCache;
-    // XXX getView can be called for existing views and the result discarded!
-    private ArrayMap<ImageLoadRequest, ImageView> imageViews = new ArrayMap<>();
     private final Runnable notifyDataSetChanged = new Runnable() {
         @Override
         public void run() {
             notifyDataSetChanged();
         }
     };
+    private boolean die = false;
 
     public MessageListAdapter(ListView listView) {
         this.listView = listView;
@@ -74,7 +73,14 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                 return value.getByteCount();
             }
         };
-        loaderThread.start();
+        TypedArray colors = App.context.getTheme().obtainStyledAttributes(new int[]{
+                android.R.attr.textColorPrimary,
+                android.R.attr.textColorPrimaryInverse
+        });
+        textColorLight = colors.getColor(0, 0xffffffff);
+        textColorDark = colors.getColor(1, 0xff000000);
+        colors.recycle();
+        new Thread(this, "Image loader").start();
     }
 
     public void onServiceConnected(MessageService.Binder service) {
@@ -140,7 +146,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
 
     @Override
     public void run() {
-        while (true) {
+        while (!die) {
             boolean loadedAnImage = false;
             while (true) {
                 final ImageLoadRequest request;
@@ -166,7 +172,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                 listView.post(notifyDataSetChanged);
             }
             synchronized (loadImageRequests) {
-                if (!loadImageRequests.isEmpty()) {
+                if (die || !loadImageRequests.isEmpty()) {
                     continue;
                 }
                 try {
@@ -185,7 +191,6 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
             view.setImageBitmap(bitmap);
             return;
         }
-        imageViews.put(request, view);
         synchronized (loadImageRequests) {
             if (!loadImageRequests.contains(request)) {
                 loadImageRequests.add(request);
@@ -214,15 +219,12 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                 } else {
                     color = 0xffaaffaa;
                 }
-                ColorStateList textColor;
-                // "Dark" and "Light" in these color names refer to the themes they are part of
-                if (Util.perceivedBrightness(color) < 0.5f) {
-                    textColor = App.resources.getColorStateList(R.color.abc_primary_text_material_dark);
-                } else {
-                    textColor = App.resources.getColorStateList(R.color.abc_primary_text_material_light);
-                }
                 view.setBackgroundColor(color);
-                view.setTextColor(textColor);
+                if (Util.perceivedBrightness(color) < 0.5f) {
+                    view.setTextColor(textColorLight);
+                } else {
+                    view.setTextColor(textColorDark);
+                }
                 view.setText(service.getText(messageID));
                 return view;
             }
@@ -249,7 +251,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                     });
                     return view;
                 }
-                boolean overflow = count > MAX_PREVIEW_PHOTOS;
+                int overflow = max(count - MAX_PREVIEW_PHOTOS, 0);
                 TableLayout view = (TableLayout) convertView;
                 if (view == null) {
                     int rows, columns;
@@ -276,7 +278,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                             View entry;
                             ImageView image = new SquareImageView(context);
                             image.setMinimumWidth(listView.getWidth() / columns);
-                            if (photoIndex++ == MAX_PREVIEW_PHOTOS - 1 && overflow) {
+                            if (photoIndex++ == MAX_PREVIEW_PHOTOS - 1 && overflow > 0) {
                                 FrameLayout frame = new FrameLayout(context);
                                 frame.addView(image);
                                 TextView text = new TextView(context);
@@ -304,9 +306,11 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                     TableRow row = (TableRow) view.getChildAt(rowIndex);
                     for (int columnIndex = 0; columnIndex < row.getChildCount(); columnIndex++) {
                         ImageView entry;
-                        if (photoIndex == MAX_PREVIEW_PHOTOS - 1 && overflow) {
+                        if (photoIndex == MAX_PREVIEW_PHOTOS - 1 && overflow > 0) {
+                            String label = App.resources.getQuantityString(R.plurals.more_pictures,
+                                    overflow, overflow);
                             FrameLayout frame = (FrameLayout) row.getChildAt(columnIndex);
-                            ((TextView) frame.getChildAt(1)).setText("+ " + (count - previewCount) + " more");
+                            ((TextView) frame.getChildAt(1)).setText(label);
                             entry = (ImageView) frame.getChildAt(0);
                         } else {
                             entry = (ImageView) row.getChildAt(columnIndex);
@@ -330,22 +334,11 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
         throw new AssertionError("Invalid/unimplemented message type: " + type);
     }
 
-    private void removeImageView(ImageView imageView) {
-        for (int i = 0; i < imageViews.size(); i++) {
-            if (imageViews.valueAt(i) == imageView) {
-                imageViews.removeAt(i);
-                return;
-            }
-        }
-        imageView.setImageBitmap(null);
-    }
-
     @Override
     public void onMovedToScrapHeap(View view) {
         if (view instanceof ImageView) {
-            // TODO add to image cache
             ImageView imageView = (ImageView) view;
-            removeImageView(imageView);
+            imageView.setImageBitmap(null);
         } else if (view instanceof TableLayout) {
             TableLayout table = (TableLayout) view;
             for (int rowIndex = 0; rowIndex < table.getChildCount(); rowIndex++) {
@@ -360,34 +353,16 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                     } else {
                         throw new AssertionError("Entry not an instance of an appropriate class?");
                     }
-                    removeImageView(imageView);
+                    imageView.setImageBitmap(null);
                 }
             }
         }
     }
 
-    class MessagePart {
-        public int message;
-        public int part;
-
-        public MessagePart(int message, int part) {
-            this.message = message;
-            this.part = part;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-
-            MessagePart that = (MessagePart) o;
-
-            return message == that.message && part == that.part;
-        }
-
-        @Override
-        public int hashCode() {
-            return 31 * message + part;
+    public void onDestroy() {
+        die = true;
+        synchronized (loadImageRequests) {
+            loadImageRequests.notify();
         }
     }
 

@@ -2,7 +2,6 @@ package com.klkblake.mm;
 
 import android.app.Service;
 import android.content.Intent;
-import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.IBinder;
 
@@ -39,7 +38,7 @@ public final class MessageService extends Service implements Runnable {
     // Type 0 - Pending content
     // TODO implement pending data
     // Type 1 - Text
-    ArrayList<byte[]> texts = new ArrayList<>(); // TODO manual string alloc
+    ArrayList<byte[]> texts = new ArrayList<>(); // TODO manual string alloc?
     // Type 2 - Photos
     ShortArray photoCounts = new ShortArray();
 
@@ -78,16 +77,13 @@ public final class MessageService extends Service implements Runnable {
 
     @Override
     public void run() {
-        while (true) {
-            if (die) {
-                break;
-            }
+        while (!die) {
             for (MessageListAdapter adapter; (adapter = newAdapters.poll()) != null;) {
                 adapter.updateLoadedRange(messageIDStart, timestamps.count);
                 adapters.add(adapter);
             }
             boolean loadedRangeDirty = false;
-            for (Boolean message; (message = messagesToSend.poll()) != null;) {
+            while (messagesToSend.poll() != null) {
                 loadedRangeDirty = true;
             }
             if (loadedRangeDirty) {
@@ -123,14 +119,6 @@ public final class MessageService extends Service implements Runnable {
         
         public String getPhotosDir() {
             return photosDir;
-        }
-
-        public int getFirstLoaded() {
-            return messageIDStart;
-        }
-
-        public int getLoadedCount() {
-            return timestamps.count;
         }
 
         // TODO Once we are doing proper multithreading, ensure that these are inlined as much as possible.
@@ -189,12 +177,12 @@ public final class MessageService extends Service implements Runnable {
         // Returns -1 on success, or else the index of the photo that failed.
         // XXX This is seriously redundant with the previous method
         public int sendPhotos(Uri[] photoUris) {
-            // XXX Gack! This is *wrong* for single photos!
             int messageId = messageIDStart + timestamps.count;
             ensurePhotosDirExists();
             File messageDir = null;
             if (photoUris.length > 1) {
                 messageDir = new File(photosDir, Integer.toString(messageId));
+                //noinspection ResultOfMethodCallIgnored
                 messageDir.mkdir();
                 if (!messageDir.isDirectory()) {
                     // XXX Failure point
@@ -233,6 +221,7 @@ public final class MessageService extends Service implements Runnable {
 
         private void ensurePhotosDirExists() {
             File photosDirFile = new File(photosDir);
+            //noinspection ResultOfMethodCallIgnored
             photosDirFile.mkdir();
             if (!photosDirFile.isDirectory()) {
                 // XXX Failure point

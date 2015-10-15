@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="EntryPointsManager">
-    <entry_points version="2.0" />
+    <entry_points version="2.0">
+      <entry_point TYPE="method" FQNAME="com.klkblake.mm.MainActivity void sendMessage(android.view.View view)" />
+      <entry_point TYPE="method" FQNAME="com.klkblake.mm.MainActivity void takePhoto(android.view.View view)" />
+      <entry_point TYPE="method" FQNAME="com.klkblake.mm.MainActivity void selectPhotos(android.view.View view)" />
+    </entry_points>
   </component>
   <component name="NullableNotNullManager">
     <option name="myDefaultNullable" value="android.support.annotation.Nullable" />

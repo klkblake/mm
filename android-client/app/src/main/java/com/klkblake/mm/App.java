@@ -10,11 +10,9 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.ThumbnailUtils;
 import android.net.Uri;
-import android.provider.MediaStore;
 import android.support.v4.content.FileProvider;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
 
@@ -71,34 +69,15 @@ public class App {
         return contentResolver.openInputStream(uri);
     }
 
-    private static Bitmap decodeSampledBitmap(InputStream is1, InputStream is2, int reqWidth, int reqHeight) {
-        // TODO make this respect EXIF rotation
+    public static Bitmap decodeSampledBitmap(String path, int reqWidth, int reqHeight) {
         BitmapFactory.Options options = new BitmapFactory.Options();
         options.inJustDecodeBounds = true;
-        BitmapFactory.decodeStream(is1, null, options);
+        BitmapFactory.decodeFile(path, options);
         options.inSampleSize =
                 calculateSampleSize(options.outWidth, options.outHeight, reqWidth, reqHeight);
         options.inJustDecodeBounds = false;
-        Bitmap bitmap = BitmapFactory.decodeStream(is2, null, options);
+        Bitmap bitmap = BitmapFactory.decodeFile(path, options);
         return ThumbnailUtils.extractThumbnail(bitmap, reqWidth, reqHeight,
                 ThumbnailUtils.OPTIONS_RECYCLE_INPUT);
-    }
-
-    public static Bitmap decodeSampledBitmap(String path, int reqWidth, int reqHeight) {
-        try {
-            return decodeSampledBitmap(new FileInputStream(path), new FileInputStream(path),
-                    reqWidth, reqHeight);
-        } catch (FileNotFoundException e) {
-            return null;
-        }
-    }
-
-    public static Bitmap decodeSampledBitmap(Uri uri, int reqWidth, int reqHeight) {
-        try {
-            return decodeSampledBitmap(openInputStream(uri), openInputStream(uri),
-                    reqWidth, reqHeight);
-        } catch (FileNotFoundException e) {
-            return null;
-        }
     }
 }
