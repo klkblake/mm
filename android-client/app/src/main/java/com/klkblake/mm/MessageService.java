@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.channels.ReadableByteChannel;
@@ -36,6 +37,7 @@ public final class MessageService extends Service implements Runnable, SessionLi
 
     @Override
     public void onCreate() {
+        // TODO clean up temp dirs?
         photosDir = getCacheDir() + "/photos";
         die = false;
         mainThread = new Thread(this, "Main service thread");
@@ -57,7 +59,7 @@ public final class MessageService extends Service implements Runnable, SessionLi
     @Override
     public void run() {
         while (!die) {
-            for (MessageListAdapter adapter; (adapter = newAdapters.poll()) != null;) {
+            for (MessageListAdapter adapter; (adapter = newAdapters.poll()) != null; ) {
                 adapter.updateMessages(messageCount);
                 adapters.add(adapter);
             }
@@ -145,7 +147,7 @@ public final class MessageService extends Service implements Runnable, SessionLi
                 monitor.notify();
             }
         }
-        
+
         public String getPhotosDir() {
             return photosDir;
         }
@@ -168,7 +170,14 @@ public final class MessageService extends Service implements Runnable, SessionLi
                     photos[i] = File.createTempFile("photo", ".jpg", App.context.getFilesDir());
                     ReadableByteChannel src = Channels.newChannel(in);
                     FileChannel dst = new FileOutputStream(photos[i]).getChannel();
-                    dst.transferFrom(src, 0, Long.MAX_VALUE);
+                    ByteBuffer buf = ByteBuffer.allocateDirect(65536);
+                    while (src.read(buf) != -1) {
+                        buf.flip();
+                        while (buf.hasRemaining()) {
+                            dst.write(buf);
+                        }
+                        buf.clear();
+                    }
                     src.close();
                     dst.close();
                 } catch (IOException e) {
