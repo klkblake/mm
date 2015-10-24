@@ -123,7 +123,7 @@ public class Session implements Runnable {
 
     private void storePhotos(int messageID, long timestamp, boolean author, short photoCount) {
         photoCounts.add(photoCount);
-        storeMessage(messageID, timestamp, author, TYPE_TEXT, photoCounts.count - 1);
+        storeMessage(messageID, timestamp, author, TYPE_PHOTOS, photoCounts.count - 1);
     }
 
     private File fileForPart(int messageID, int partID, boolean isSingle) throws FilesystemFailure {
