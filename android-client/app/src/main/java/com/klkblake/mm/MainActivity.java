@@ -16,9 +16,11 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.ListView;
-import android.widget.Toast;
 
 import java.io.File;
+import java.io.IOException;
+
+import static com.klkblake.mm.App.toast;
 
 
 public class MainActivity extends AppActivity {
@@ -39,9 +41,6 @@ public class MainActivity extends AppActivity {
         ListView messageList = (ListView) findViewById(R.id.messageList);
         composeText = (EditText) findViewById(R.id.composeText);
         sendButton = (FloatingActionButton) findViewById(R.id.sendButton);
-
-        File cacheDir = getCacheDir();
-        tempPhotoPath = cacheDir.getPath() + "/photo.jpg";
 
         messages = new MessageListAdapter(messageList);
         messageList.setAdapter(messages);
@@ -120,6 +119,12 @@ public class MainActivity extends AppActivity {
             notifyServiceNotConnected();
             return;
         }
+        try {
+            tempPhotoPath = File.createTempFile("photo", ".jpg", getFilesDir()).getPath();
+        } catch (IOException e) {
+            toast("Can't create temp file to store photo");
+            return;
+        }
         Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         intent.setFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
         intent.putExtra(MediaStore.EXTRA_OUTPUT, App.getUriForPath(tempPhotoPath));
@@ -160,20 +165,12 @@ public class MainActivity extends AppActivity {
                     photoUris[i] = selected.getItemAt(i).getUri();
                 }
             }
-            int failIndex = service.sendPhotos(photoUris);
-            if (failIndex != -1) {
-                // XXX Failure point
-                couldntReadPhoto(failIndex);
-            }
+            service.sendPhotos(photoUris);
         }
     }
 
     private void notifyServiceNotConnected() {
-        Toast.makeText(App.context, "The service is not yet available.", Toast.LENGTH_SHORT).show();
-    }
-
-    private void couldntReadPhoto(int i) {
-        Toast.makeText(App.context, "Could not read photo " + (i + 1), Toast.LENGTH_SHORT).show();
+        toast("The service is not yet available.");
     }
 
     @Override

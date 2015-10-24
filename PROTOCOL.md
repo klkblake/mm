@@ -92,18 +92,24 @@ data channel once the client receives the message ID.
 
     >PHOTOS <size> <size> <size>...
     <ACK <id> <timestamp>
+    *data channel transfer*
+    <DACK <id> <part> (occurs once for each photo)
 
 Send photos. The photo is encoded as a JPEG of the specified size. The number
 of photos is implicitly capped to 79 due to the cap on the encoded ciphertext
-size.
+size. The DACK reports that the server has fully received the specified photo.
 
     >AUDIO <size>
     <ACK <id> <timestamp>
+    *data channel transfer*
+    <DACK <id> <part>
 
 Send a short audio recording. Format TBA.
 
     >VIDEO <size>
     <ACK <id> <timestamp>
+    *data channel transfer*
+    <DACK <id> <part>
 
 Send a short video recording. Format TBA.
 
@@ -114,6 +120,8 @@ Send a short video recording. Format TBA.
     <AUDIO <id> <timestamp> <size>
     <VIDEO <id> <timestamp> <size>
     >ACK
+    *data channel transfer*
+    >DACK <id> <part>
 
 Receiving a message works exactly the same way, except for which message
 communicates the ID. The server may not begin transferring data on the data
@@ -234,9 +242,6 @@ The part field is used for albums, to distinguish which photo this chunk
 belongs to. The chunk field indicated which chunk this data is for. The length
 field is the length of the data field, not the whole message. The length should
 have one added to it to get the actual length of the data field.
-
-If the top bit of the part field is set, then this is an ACK for the specified
-chunk, indicating that the data has been received and written to disk.
 
 If the message id is zero and the part field is all ones (except for the top
 bit), then this is the user's photo.

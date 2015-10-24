@@ -6,7 +6,6 @@ import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.net.Uri;
-import android.util.ArrayMap;
 import android.util.LruCache;
 import android.view.Gravity;
 import android.view.View;
@@ -23,8 +22,8 @@ import android.widget.TextView;
 
 import java.util.ArrayDeque;
 
-import static com.klkblake.mm.MessageService.TYPE_PHOTOS;
-import static com.klkblake.mm.MessageService.TYPE_TEXT;
+import static com.klkblake.mm.Message.TYPE_PHOTOS;
+import static com.klkblake.mm.Message.TYPE_TEXT;
 import static com.klkblake.mm.Util.max;
 import static com.klkblake.mm.Util.min;
 
@@ -33,6 +32,7 @@ import static com.klkblake.mm.Util.min;
  */
 public class MessageListAdapter extends BaseAdapter implements AbsListView.RecyclerListener, Runnable {
     public static final int MAX_PREVIEW_PHOTOS = 9;
+    private final Thread loaderThread;
 
     private ListView listView;
     private MessageService.Binder service = null;
@@ -80,7 +80,8 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
         textColorLight = colors.getColor(0, 0xffffffff);
         textColorDark = colors.getColor(1, 0xff000000);
         colors.recycle();
-        new Thread(this, "Image loader").start();
+        loaderThread = new Thread(this, "Image loader");
+        loaderThread.start();
     }
 
     public void onServiceConnected(MessageService.Binder service) {
@@ -89,23 +90,12 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
         photosDir = service.getPhotosDir();
     }
 
-    public void updateLoadedRange(final int newMessageIDStart, final int newMessageCount) {
+    public void updateMessages(final int newMessageCount) {
         listView.post(new Runnable() {
             @Override
             public void run() {
-                int position = listView.getFirstVisiblePosition();
-                View view = listView.getChildAt(0);
-                int top = 0;
-                if (view != null) {
-                    top = view.getTop();
-                    position += messageIDStart - newMessageIDStart;
-                }
-                messageIDStart = newMessageIDStart;
                 messageCount = newMessageCount;
                 notifyDataSetChanged();
-                if (view != null) {
-                    listView.setSelectionFromTop(position, top);
-                }
             }
         });
     }
@@ -127,10 +117,10 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
 
     @Override
     public int getItemViewType(int position) {
-        int messageID = messageIDStart + position;
-        int type = service.getType(messageID);
+        Message message = service.getMessage(messageIDStart + position);
+        int type = message.type;
         if (type == TYPE_PHOTOS) {
-            int photoCount = service.getLoadedPhotoCount(messageID);
+            int photoCount = message.photoCount;
             if (photoCount > MAX_PREVIEW_PHOTOS) {
                 photoCount = MAX_PREVIEW_PHOTOS + 1;
             }
@@ -164,6 +154,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                 }
                 final Bitmap bitmap = App.decodeSampledBitmap(path, request.reqWidth, request.reqHeight);
                 // TODO handle decode fail
+                // TODO If file doesn't exist yet, wait for notification from Session.
                 imageCache.put(request, bitmap);
                 loadImageRequests.remove();
                 loadedAnImage = true;
@@ -203,10 +194,9 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
         int messageID = messageIDStart + position;
-        boolean author = service.getAuthor(messageID);
-        int type = service.getType(messageID);
+        Message message = service.getMessage(messageIDStart + position);
         Context context = parent.getContext();
-        switch (type) {
+        switch (message.type) {
             case TYPE_TEXT: {
                 TextView view = (TextView) convertView;
                 if (view == null) {
@@ -214,7 +204,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                 }
                 int color;
                 // TODO actually look up author colors
-                if (author == Message.AUTHOR_US) {
+                if (message.author == Message.AUTHOR_US) {
                     color = 0xffffaaaa;
                 } else {
                     color = 0xffaaffaa;
@@ -225,12 +215,12 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                 } else {
                     view.setTextColor(textColorDark);
                 }
-                view.setText(service.getText(messageID));
+                view.setText(message.text);
                 return view;
             }
             case TYPE_PHOTOS: {
                 // TODO share from contextual menu on long press
-                final int count = service.getLoadedPhotoCount(messageID);
+                final int count = message.photoCount;
                 int previewCount = min(count, MAX_PREVIEW_PHOTOS);
                 if (count == 1) {
                     ImageView view = (ImageView) convertView;
@@ -331,7 +321,7 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
                 return view;
             }
         }
-        throw new AssertionError("Invalid/unimplemented message type: " + type);
+        throw new AssertionError("Invalid/unimplemented message type: " + message.type);
     }
 
     @Override
@@ -363,6 +353,11 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
         die = true;
         synchronized (loadImageRequests) {
             loadImageRequests.notify();
+        }
+        try {
+            loaderThread.join();
+        } catch (InterruptedException e) {
+            Util.impossible(e);
         }
     }
 

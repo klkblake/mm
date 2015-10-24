@@ -11,6 +11,7 @@ import android.graphics.BitmapFactory;
 import android.media.ThumbnailUtils;
 import android.net.Uri;
 import android.support.v4.content.FileProvider;
+import android.widget.Toast;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -79,5 +80,9 @@ public class App {
         Bitmap bitmap = BitmapFactory.decodeFile(path, options);
         return ThumbnailUtils.extractThumbnail(bitmap, reqWidth, reqHeight,
                 ThumbnailUtils.OPTIONS_RECYCLE_INPUT);
+    }
+
+    public static void toast(String message) {
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
     }
 }
