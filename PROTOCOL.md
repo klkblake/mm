@@ -4,13 +4,13 @@ Protocol specification
 The protocol uses two ports, the control port 29192 and the data port 29292.
 The data port is used for uploading/downloading large files (pictures,
 videos, etc).  Appart from the initial exchange, everything is encrypted using
-sodium's crypto_box.
+sodium's `crypto_box`.
 
 All messages are prepended by a u16 unencrypted size field.  This size is
 offset by 1 (as in, a value of 5 would mean that the message is 6 bytes long).
-The size excludes the size of the authentication tag (crypto_box_MACBYTES).
+The size excludes the size of the authentication tag (`crypto_box_MACBYTES`).
 Note that the translation from encoded size to actual size is uniform, so you
-must add crypto_box_box_MACBYTES even if the message is not encrypted for the
+must add `crypto_box_MACBYTES` even if the message is not encrypted for the
 control channel, and the size of the normal header for the data channel. For
 messages on the data channel, the size also excludes the size of the header.
 Messages on the control channel are capped to a maximum size of 1024 (so
@@ -19,14 +19,14 @@ encoded as 1023).
 Encryption Negotiation
 ----------------------
 
-    struct ClientHel {
+    struct HelClient {
         u16 version;
         u64 nonce1;
         u8 public_key[32];
     };
 
-The ClientHel message is the first thing that the client must send on creating
-the connection.
+The `HelClient` message is the first thing that the client must send on
+creating the connection.
 
 The version field contains the current version of the protocol. This version is
 version 0.
@@ -40,7 +40,7 @@ The client transmits it's public key. This serves not only as a means of
 encryption, it also identifies the user. The client is expected to already know
 the server's public key.
 
-    struct ServerHel {
+    struct HelServer {
         u8 error = 0;
         u64 nonce2;
         // begin encryption
@@ -50,9 +50,9 @@ the server's public key.
         u8 name[];
     };
 
-The ServerHel is sent when the server receives a ClientHel, and the server has
-accepted the connection. Now that the client has access to the other half of
-the nonce, it can do encryption, and so the session token is encrypted. The
+The `HelServer` is sent when the server receives a `HelClient`, and the server
+has accepted the connection. Now that the client has access to the other half
+of the nonce, it can do encryption, and so the session token is encrypted. The
 session token is required to open a data connection later. All further
 communication on this channel is encrypted. The name and color specify the
 saved values for the user's preferences. Additionally, the SHA256 of the avatar
@@ -65,8 +65,8 @@ it is changed.
         u16 max_version;
     };
 
-If the provided version is not acceptable, ErrorBadVersion is sent instead of
-ServerHel, providing the permitted range of versions. The min and max are
+If the provided version is not acceptable, `ErrorBadVersion` is sent instead of
+`HelServer`, providing the permitted range of versions. The min and max are
 inclusive. The server disconnects immediatly after sending this error message
 (and indeed after all error messages).
 
@@ -80,23 +80,23 @@ the server disconnects.
 Additionally, the server may disconnect immediately on a protocol violation
 without sending a message.
 
-    struct ClientDataHello {
+    struct DataHelloClient {
         u8 session_token[32];
     };
 
 At this point the client must open a data connection and send the
-ClientDataHello. If the session token is invalid, the server closes the
+`DataHelloClient`. If the session token is invalid, the server closes the
 connection. Otherwise it transmits a single zero byte as an ACK. All further
 communication on the data channel is encrypted.
 
-    struct ClientLo {
+    struct LoClient {
         u8 peer_public_key[32];
     };
 
 Once the data connection is set up, the second part of the hello is sent. The
 peer key indicates who the client wants to talk to.
 
-    struct ServerLo {
+    struct LoServer {
         u8 error = 0;
         u32 color;
         u8 avatar_sha256[32];
@@ -151,8 +151,8 @@ but the top bit must be clear.
     };
 
 This is sent by the server in response to fully receiving a message part (in
-the case of BigText, the whole message. For something like Photos, each
-photo is a separate part).
+the case of `BigText`, the whole message. For something like Photos, each photo
+is a separate part).
 
     struct TextMessageClient {
         u8 type = 2;
@@ -172,14 +172,14 @@ byte total message length.
 
 Send a message whose data is large enough to require being sent over the data
 channel. The number of parts is capped to 251 as per the same restriction as
-for TextMessage. Most parts may not appear more than once per message. Parts
+for `TextMessage`. Most parts may not appear more than once per message. Parts
 must not be sent before receiving acknowledgement of the message from the
 server. There are currently two part types defined:
 
-Send a large text message (part_type = 0). The message data is encoded the same
+Send a large text message (`part_type = 0`). The message data is encoded the same
 way as for a normal message.
 
-Send photos (part_type = 1). The photos are encoded as JPEGs. This part may
+Send photos (`part_type = 1`). The photos are encoded as JPEGs. This part may
 appear multiple times in a message, though it may not be mixed with other part
 types.
 
