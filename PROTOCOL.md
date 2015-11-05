@@ -86,8 +86,9 @@ without sending a message.
 
 At this point the client must open a data connection and send the
 `DataHelloClient`. If the session token is invalid, the server closes the
-connection. Otherwise it transmits a single zero byte as an ACK. All further
-communication on the data channel is encrypted.
+connection. Otherwise it transmits a minimum length message that consists only
+of zero bytes as an ACK. All further communication on the data channel is
+encrypted.
 
     struct LoClient {
         u8 peer_public_key[32];
