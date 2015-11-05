@@ -4,7 +4,17 @@ Protocol specification
 The protocol uses two ports, the control port 29192 and the data port 29292.
 The data port is used for uploading/downloading large files (pictures,
 videos, etc).  Appart from the initial exchange, everything is encrypted using
-NaCl's crypto_box.
+sodium's crypto_box.
+
+All messages are prepended by a u16 unencrypted size field.  This size is
+offset by 1 (as in, a value of 5 would mean that the message is 6 bytes long).
+The size excludes the size of the authentication tag (crypto_box_MACBYTES).
+Note that the translation from encoded size to actual size is uniform, so you
+must add crypto_box_box_MACBYTES even if the message is not encrypted for the
+control channel, and the size of the normal header for the data channel. For
+messages on the data channel, the size also excludes the size of the header.
+Messages on the control channel are capped to a maximum size of 1024 (so
+encoded as 1023).
 
 Encryption Negotiation
 ----------------------
@@ -37,11 +47,7 @@ the server's public key.
         u8 session_token[32];
         u32 color;
         u8 avatar_sha256[32];
-        u16 name_size;
-        // end encryption
-        // begin encryption
-        u8 name[name_size];
-        // end encryption
+        u8 name[];
     };
 
 The ServerHel is sent when the server receives a ClientHel, and the server has
@@ -94,8 +100,6 @@ peer key indicates who the client wants to talk to.
         u8 error = 0;
         u32 color;
         u8 avatar_sha256[32];
-        u16 name_size;
-        // seperately encrypted
         u8 name[];
     };
 
@@ -106,13 +110,6 @@ Once the server is ready, it sends the settings for the peer.
      };
 
 If the server does not know the peer, it sends an error and disconnects.
-
-From this point, all messages are prepended by a u16 unencrypted size field.
-This size is offset by 1 (as in, a value of 5 would mean that the message is 6
-bytes long). The size excludes the size of the authentication tag
-(crypto_box_MACBYTES). For messages on the data channel, the size also excludes
-the size of the header. Messages on the control channel are capped to a maximum
-size of 1024 (so encoded as 1023).
 
 Message Type Overview
 ---------------------
@@ -340,8 +337,7 @@ Large blobs of data -- photos, videos, etc -- are transmitted in chunks of
 away from a very large file to transfer waiting smaller files, creating the
 illusion of faster transfer.
 
-The data channel, unlike the control channel, uses a binary protocol after the
-initial negotiation. All messages use the same format, as follows:
+All messages use the same format, as follows:
 
     struct {
         u63 message_id;
