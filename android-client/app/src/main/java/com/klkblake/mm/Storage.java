@@ -27,19 +27,22 @@ public class Storage {
         this.photosDir = photosDir;
     }
 
-    private void storeMessage(long messageID, long timestamp, boolean author, int type, int index) {
+    private void storeMessage(long messageID, long timestamp, boolean author, int type, int index) throws AssertionFailure {
         // XXX fix this messageID cast nonsense
+        if (messageID > Integer.MAX_VALUE) {
+            throw new AssertionFailure("message ID too big");
+        }
         timestamps.set((int) messageID, timestamp);
         authors.set((int) messageID, author);
         indexes.set((int) messageID, type << TYPE_SHIFT | index & INDEX_MASK);
     }
 
-    synchronized void storeMessage(long messageID, long timestamp, boolean author, String message) {
+    synchronized void storeMessage(long messageID, long timestamp, boolean author, String message) throws AssertionFailure {
         texts.add(Util.utf8Encode(message));
         storeMessage(messageID, timestamp, author, Message.TYPE_TEXT, texts.size() - 1);
     }
 
-    synchronized void storePhotos(long messageID, long timestamp, boolean author, short photoCount) {
+    synchronized void storePhotos(long messageID, long timestamp, boolean author, short photoCount) throws AssertionFailure {
         photoCounts.add(photoCount);
         storeMessage(messageID, timestamp, author, Message.TYPE_PHOTOS, photoCounts.count - 1);
     }

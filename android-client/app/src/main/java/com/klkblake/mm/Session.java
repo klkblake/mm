@@ -43,6 +43,7 @@ public class Session implements Runnable {
     private static final byte MTYPE_PART_MESSAGE_CLIENT = 3;
     private static final byte PTYPE_PHOTOS = 1;
     private static final int MIN_LENGTH = 1 + MACBYTES;
+    private static final long MAX_FILE_SIZE = 4 * 1024 * 1024;
 
     private volatile boolean dead = true;
     private Selector selector;
@@ -165,7 +166,6 @@ public class Session implements Runnable {
                             if (timestamp < 0) {
                                 throw new ProtocolFailure("Received ACK with negative timestamp ID");
                             }
-                            ASSERT(id <= Integer.MAX_VALUE, "message ID too big"); // XXX deal with this properly
                             SendingMessage message = messagesPending.poll();
                             if (message == null) {
                                 throw new ProtocolFailure("Received ACK with no messages pending");
@@ -184,7 +184,6 @@ public class Session implements Runnable {
                         } else if (type == MTYPE_DACK_SERVER) {
                             long id = controlRecvBuf.getLong();
                             int part = ub2i(controlRecvBuf.get());
-                            ASSERT(id <= Integer.MAX_VALUE, "message ID too big"); // XXX deal with this properly
                             SendingData data = dataPending.poll();
                             if (data == null) {
                                 throw new ProtocolFailure("Received DACK for non-pending data");
@@ -237,11 +236,12 @@ public class Session implements Runnable {
                             controlSendBuf.put(PTYPE_PHOTOS);
                             for (int i = 0; i < message.photos.length; i++) {
                                 controlSendBuf.put((byte) ' ');
-                                // XXX do we want to treat the file not existing here as a recoverable error?
-                                // XXX we definitely don't want to deliver a file that is >2GB!
                                 message.photoSizes[i] = message.photos[i].length();
                                 if (message.photoSizes[i] == 0) {
-                                    throw new FilesystemFailure("Part file does not exist");
+                                    throw new FilesystemFailure("Photo file does not exist");
+                                }
+                                if (message.photoSizes[i] > MAX_FILE_SIZE) {
+                                    throw new FilesystemFailure("Photo is too big");
                                 }
                                 controlSendBuf.putInt((int) message.photoSizes[i]);
                             }
@@ -280,7 +280,6 @@ public class Session implements Runnable {
                         }
                         long remaining = data.photoSize - data.chunksSent * MAX_CHUNK_SIZE;
                         int sizeToSend = (int) min(remaining, MAX_CHUNK_SIZE);
-                        // TODO seriously consider our limits/sizes.
                         dataSendBuf.clear();
                         int length = sizeToSend - MIN_LENGTH;
                         // We either (a) will do the MAC, or (b) are sending DataClientHello,
