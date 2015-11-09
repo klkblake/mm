@@ -1,7 +1,5 @@
 package com.klkblake.mm;
 
-import android.util.LongSparseArray;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -21,7 +19,6 @@ import static com.klkblake.mm.Message.TYPE_PHOTOS;
 import static com.klkblake.mm.Message.TYPE_TEXT;
 import static com.klkblake.mm.Util.min;
 import static com.klkblake.mm.Util.ub2i;
-import static com.klkblake.mm.Util.us2i;
 import static com.klkblake.mm.Util.utf8Decode;
 import static com.klkblake.mm.Util.utf8Encode;
 import static java.nio.channels.SelectionKey.OP_READ;
@@ -63,7 +60,7 @@ public class Session implements Runnable {
     private final ConcurrentLinkedQueue<SendingMessage> messagesToSend = new ConcurrentLinkedQueue<>();
     private final ArrayDeque<SendingMessage> messagesPending = new ArrayDeque<>();
     private final PriorityQueue<SendingData> dataToSend = new PriorityQueue<>();
-    private final LongSparseArray<SendingData> dataPending = new LongSparseArray<>();
+    private final ArrayDeque<SendingData> dataPending = new ArrayDeque<>();
     private final SessionListener listener;
 
     // TODO implement a disk cache
@@ -200,7 +197,7 @@ public class Session implements Runnable {
                         }
                         //TODO handle the message
                         controlRecvBuf.flip();
-                        int type = Util.ub2i(controlRecvBuf.get(LENGTH_SIZE));
+                        int type = ub2i(controlRecvBuf.get(LENGTH_SIZE));
                         controlRecvBuf.position(LENGTH_SIZE + 1);
                         if (type == MTYPE_ACK_SERVER) {
                             long id = controlRecvBuf.getLong();
@@ -231,9 +228,13 @@ public class Session implements Runnable {
                             long id = controlRecvBuf.getLong();
                             int part = ub2i(controlRecvBuf.get());
                             ASSERT(id <= Integer.MAX_VALUE, "message ID too big"); // XXX deal with this properly
-                            SendingData data = dataPending.get(id << 8 | part); // XXX this is terrible and wrong
+                            SendingData data = dataPending.poll();
                             if (data == null) {
                                 throw new ProtocolFailure("Received DACK for non-pending data");
+                            }
+                            if (data.messageID != id || data.partID != part) {
+                                throw new ProtocolFailure(String.format("Received out of order DACK. Got %d:%d, expected %d:%d",
+                                        id, part, data.messageID, data.partID));
                             }
                             if (!data.photo.renameTo(fileForPart(data.messageID, data.partID, data.isSingle))) {
                                 throw new FilesystemFailure("Couldn't move part to appropriate file");
@@ -349,8 +350,7 @@ public class Session implements Runnable {
                         }
                         write(dataChannel, dataSendBuf);
                         if (data.chunksSent * MAX_CHUNK_SIZE >= data.photoSize) {
-                            // XXX this breaks if we bump up the max messageID
-                            dataPending.put(data.messageID << 8 | data.partID, data);
+                            dataPending.add(data);
                             try {
                                 data.channel.close();
                             } catch (IOException ignored) {

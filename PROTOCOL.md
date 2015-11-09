@@ -153,7 +153,8 @@ but the top bit must be clear.
 
 This is sent by the server in response to fully receiving a message part (in
 the case of `BigText`, the whole message. For something like Photos, each photo
-is a separate part).
+is a separate part). These must be sent in the order that the server finished
+receiving the parts in.
 
     struct TextMessageClient {
         u8 type = 2;
