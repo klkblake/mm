@@ -1,5 +1,10 @@
 package com.klkblake.mm;
 
+import com.klkblake.mm.Failure.AssertionFailure;
+import com.klkblake.mm.Failure.FilesystemFailure;
+import com.klkblake.mm.Failure.ProtocolFailure;
+import com.klkblake.mm.Failure.SocketFailure;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -11,15 +16,12 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.PriorityQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import static com.klkblake.mm.Message.TYPE_PHOTOS;
 import static com.klkblake.mm.Message.TYPE_TEXT;
 import static com.klkblake.mm.Util.min;
 import static com.klkblake.mm.Util.ub2i;
-import static com.klkblake.mm.Util.utf8Decode;
 import static com.klkblake.mm.Util.utf8Encode;
 import static java.nio.channels.SelectionKey.OP_READ;
 import static java.nio.channels.SelectionKey.OP_WRITE;
@@ -33,9 +35,6 @@ public class Session implements Runnable {
     public static final int CONTROL_LENGTH_MAX = 1024;
     public static final int MAX_CHUNK_SIZE = 65536;
     private static final int MACBYTES = 16; // TODO get this from the crypto library
-    // TODO Always have all past messages loaded
-    public static final int TYPE_SHIFT = 29;
-    public static final int INDEX_MASK = (1 << TYPE_SHIFT) - 1;
     private static final int MTYPE_ACK_SERVER = 0;
     private static final int MTYPE_DACK_SERVER = 1;
     public static final int MAX_PARTS = 251;
@@ -61,24 +60,11 @@ public class Session implements Runnable {
     private final ArrayDeque<SendingMessage> messagesPending = new ArrayDeque<>();
     private final PriorityQueue<SendingData> dataToSend = new PriorityQueue<>();
     private final ArrayDeque<SendingData> dataPending = new ArrayDeque<>();
+    private final Storage storage;
     private final SessionListener listener;
 
-    // TODO implement a disk cache
-    // TODO always have metadata for *all* previous messages stored
-    private final String photosDir;
-    // FIXME signed/unsigned bugs. probably store compressed here, and expand in use?
-    private LongArray timestamps = new LongArray();
-    private BooleanArray authors = new BooleanArray();
-    private IntArray indexes = new IntArray();
-    // Type 0 - Pending content
-    // TODO implement pending data
-    // Type 1 - Text
-    private ArrayList<byte[]> texts = new ArrayList<>(); // TODO manual string alloc?
-    // Type 2 - Photos
-    private ShortArray photoCounts = new ShortArray();
-
-    public Session(String photosDir, SessionListener listener) {
-        this.photosDir = photosDir;
+    public Session(Storage storage, SessionListener listener) {
+        this.storage = storage;
         this.listener = listener;
         controlSendBuf.order(ByteOrder.LITTLE_ENDIAN);
         controlRecvBuf.order(ByteOrder.LITTLE_ENDIAN);
@@ -112,39 +98,6 @@ public class Session implements Runnable {
 
         dead = false;
         new Thread(this, "Session Thread").start();
-    }
-
-    private void storeMessage(long messageID, long timestamp, boolean author, int type, int index) {
-        // XXX fix this messageID cast nonsense
-        timestamps.set((int) messageID, timestamp);
-        authors.set((int) messageID, author);
-        indexes.set((int) messageID, type << Session.TYPE_SHIFT | index & Session.INDEX_MASK);
-    }
-
-    private void storeMessage(long messageID, long timestamp, boolean author, String message) {
-        texts.add(utf8Encode(message));
-        storeMessage(messageID, timestamp, author, TYPE_TEXT, texts.size() - 1);
-    }
-
-    private void storePhotos(long messageID, long timestamp, boolean author, short photoCount) {
-        photoCounts.add(photoCount);
-        storeMessage(messageID, timestamp, author, TYPE_PHOTOS, photoCounts.count - 1);
-    }
-
-    private void storePhoto(SendingData data) throws FilesystemFailure {
-        File file;
-        if (data.isSingle) {
-            file = new File(photosDir, data.messageID + ".jpg");
-        } else {
-            File dir = new File(photosDir, Long.toString(data.messageID));
-            if (!dir.mkdir() && !dir.isDirectory()) {
-                throw new FilesystemFailure("Could not create directory " + dir.getAbsolutePath());
-            }
-            file = new File(dir, data.partID + ".jpg");
-        }
-        if (!data.photo.renameTo(file)) {
-            throw new FilesystemFailure("Could not move file " + file);
-        }
     }
 
     private static void read(SocketChannel channel, ByteBuffer buf) throws SocketFailure {
@@ -218,14 +171,14 @@ public class Session implements Runnable {
                                 throw new ProtocolFailure("Received ACK with no messages pending");
                             }
                             if (message.type == TYPE_TEXT) {
-                                storeMessage(id, timestamp, Message.AUTHOR_US, message.message);
+                                storage.storeMessage(id, timestamp, Message.AUTHOR_US, message.message);
                                 listener.receivedMessage(id, timestamp, Message.AUTHOR_US, message.message);
                             } else if (message.type == Message.TYPE_PHOTOS) {
                                 for (int i = 0; i < message.photos.length; i++) {
                                     dataToSend.add(new SendingData(id, i, message.photos[i],
                                             message.photoSizes[i], message.photos.length == 1));
                                 }
-                                storePhotos(id, timestamp, Message.AUTHOR_US, (short) message.photos.length);
+                                storage.storePhotos(id, timestamp, Message.AUTHOR_US, (short) message.photos.length);
                                 listener.receivedMessage(id, timestamp, Message.AUTHOR_US, message.photos.length);
                             }
                         } else if (type == MTYPE_DACK_SERVER) {
@@ -240,7 +193,7 @@ public class Session implements Runnable {
                                 throw new ProtocolFailure(String.format("Received out of order DACK. Got %d:%d, expected %d:%d",
                                         id, part, data.messageID, data.partID));
                             }
-                            storePhoto(data);
+                            storage.storePhoto(data);
                             listener.receivedPart(data.messageID, data.partID);
                         } else {
                             throw new ProtocolFailure("Illegal server message type " + type);
@@ -417,89 +370,10 @@ public class Session implements Runnable {
         enqueueMessage(new SendingMessage(photos));
     }
 
-    public Message getMessage(int id) {
-        // XXX threading? Is this remotely safe?
-        long timestamp = timestamps.data[id];
-        boolean author = authors.data[id];
-        int tyindex = indexes.data[id];
-        int type = tyindex >> TYPE_SHIFT;
-        int index = tyindex & INDEX_MASK;
-        if (type == TYPE_TEXT) {
-            return new Message(id, timestamp, author, utf8Decode(texts.get(index)));
-        } else if (type == TYPE_PHOTOS) {
-            return new Message(id, timestamp, author, photoCounts.data[index]);
-        }
-        throw new AssertionError("Unhandled type in getMessage");
-    }
-
-    public int getMessageCount() {
-        return timestamps.count;
-    }
-
     public void close() {
         dead = true;
         if (selector != null) {
             selector.wakeup();
-        }
-    }
-
-    private static abstract class Failure extends Exception {
-        public Failure(String message) {
-            super(message);
-        }
-
-        public Failure(Throwable cause) {
-            super(cause);
-        }
-
-        public abstract void notifyListener(SessionListener listener);
-    }
-
-    private static class SocketFailure extends Failure {
-        public SocketFailure(Throwable cause) {
-            super(cause);
-        }
-
-        @Override
-        public void notifyListener(SessionListener listener) {
-            listener.networkFailed(getCause());
-        }
-    }
-
-    private static class ProtocolFailure extends Failure {
-        public ProtocolFailure(String message) {
-            super(message);
-        }
-
-        @Override
-        public void notifyListener(SessionListener listener) {
-            listener.protocolViolation(getMessage());
-        }
-    }
-
-    private static class FilesystemFailure extends Failure {
-        public FilesystemFailure(String message) {
-            super(message);
-        }
-
-        public FilesystemFailure(Throwable cause) {
-            super(cause);
-        }
-
-        @Override
-        public void notifyListener(SessionListener listener) {
-            listener.filesystemFailed(this);
-        }
-    }
-
-    private static class AssertionFailure extends Failure {
-        public AssertionFailure(String message) {
-            super(message);
-        }
-
-        @Override
-        public void notifyListener(SessionListener listener) {
-            listener.assertionFired(this);
         }
     }
 }

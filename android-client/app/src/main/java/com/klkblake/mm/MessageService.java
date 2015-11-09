@@ -22,6 +22,7 @@ public final class MessageService extends Service implements Runnable, SessionLi
 
     private Thread mainThread;
     private boolean die;
+    private Storage storage;
     private Session session;
     private Binder binder;
 
@@ -42,7 +43,8 @@ public final class MessageService extends Service implements Runnable, SessionLi
         die = false;
         mainThread = new Thread(this, "Main service thread");
         mainThread.start();
-        session = new Session(photosDir, this);
+        storage = new Storage(photosDir);
+        session = new Session(storage, this);
         if (session.isDead()) {
             //TODO notification!
             Log.e(TAG, "Session couldn't start");
@@ -92,7 +94,7 @@ public final class MessageService extends Service implements Runnable, SessionLi
     // TODO are these callbacks actually useful as is?
     @Override
     public void receivedMessage(long id, long timestamp, boolean author, String message) {
-        messageCount = session.getMessageCount();
+        messageCount = storage.getMessageCount();
         synchronized (monitor) {
             updateRequired = true;
             monitor.notify();
@@ -101,7 +103,7 @@ public final class MessageService extends Service implements Runnable, SessionLi
 
     @Override
     public void receivedMessage(long id, long timestamp, boolean author, int numPhotos) {
-        messageCount = session.getMessageCount();
+        messageCount = storage.getMessageCount();
         synchronized (monitor) {
             updateRequired = true;
             monitor.notify();
@@ -189,7 +191,7 @@ public final class MessageService extends Service implements Runnable, SessionLi
         }
 
         public Message getMessage(int id) {
-            return session.getMessage(id);
+            return storage.getMessage(id);
         }
     }
 
