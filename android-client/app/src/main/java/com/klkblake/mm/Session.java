@@ -107,22 +107,21 @@ public class Session implements Runnable {
             selector = Selector.open();
         }
         controlSendBuf.rewind();
-        controlRecvBuf.rewind();
-        dataSendBuf.rewind();
-        dataRecvBuf.rewind();
         controlSendBuf.limit(0);
-        controlRecvBuf.limit(0);
+        dataSendBuf.rewind();
         dataSendBuf.limit(0);
-        dataRecvBuf.limit(0);
+        controlRecvBuf.clear();
+        dataRecvBuf.clear();
 
         dead = false;
         new Thread(this, "Session Thread").start();
     }
 
     private void storeMessage(long messageID, long timestamp, boolean author, int type, int index) {
-        timestamps.set(messageID, timestamp);
-        authors.set(messageID, author);
-        indexes.set(messageID, type << Session.TYPE_SHIFT | index & Session.INDEX_MASK);
+        // XXX fix this messageID cast nonsense
+        timestamps.set((int) messageID, timestamp);
+        authors.set((int) messageID, author);
+        indexes.set((int) messageID, type << Session.TYPE_SHIFT | index & Session.INDEX_MASK);
     }
 
     private void storeMessage(long messageID, long timestamp, boolean author, String message) {
@@ -144,49 +143,6 @@ public class Session implements Runnable {
                 throw new FilesystemFailure("Could not create directory " + dir.getAbsolutePath());
             }
             return new File(dir, partID + ".jpg");
-        }
-    }
-
-    private void expect(char expected) throws ProtocolFailure {
-        char c = (char) controlSendBuf.get(); // TODO unsigned widen
-        if (c != expected) {
-            throw new ProtocolFailure("Expected '" + expected + "', got '" + c + "'");
-        }
-    }
-
-    private long decodeHex(ByteBuffer buf, int length) throws ProtocolFailure {
-        long value = 0;
-        for (int i = 0; i < length; i++) {
-
-            char c = (char) buf.get(); // TODO unsigned widen
-            if ((c < '0' || c > '9') && (c < 'a' || c > 'f')) {
-                throw new ProtocolFailure("Expected hex digit, got '" + c + "'");
-            }
-            value <<= 4;
-            if (c < 'a') {
-                value |= c - '0';
-            } else {
-                value |= c - 'a' + 10;
-            }
-        }
-        return value;
-    }
-
-    private void putLength(int length) {
-        controlSendBuf.put((byte) (length / 100 + '0'));
-        controlSendBuf.put((byte) (length % 100 / 10 + '0'));
-        controlSendBuf.put((byte) (length % 10 + '0'));
-        controlSendBuf.put((byte) ' ');
-    }
-
-    private void putHexSize(int size) {
-        for (int shift = 28; shift >= 0; shift -= 4) {
-            int value = (size >> shift) & 0xf;
-            if (value < 10) {
-                controlSendBuf.put((byte) (value + '0'));
-            } else {
-                controlSendBuf.put((byte) (value - 10 + 'a'));
-            }
         }
     }
 
@@ -230,27 +186,20 @@ public class Session implements Runnable {
                 } catch (IOException e) {
                     throw new SocketFailure(e);
                 }
-                if (controlKey.isWritable() && controlSendBuf.hasRemaining()) {
-                    write(controlChannel, controlSendBuf);
-                }
-                if (dataKey.isWritable() && dataSendBuf.hasRemaining()) {
-                    write(dataChannel, dataSendBuf);
-                }
                 if (controlKey.isReadable()) {
                     read(controlChannel, controlRecvBuf);
-                    if (!controlRecvBuf.hasRemaining() && controlRecvBuf.limit() == LENGTH_SIZE) {
+                    while (controlRecvBuf.position() >= LENGTH_SIZE) {
                         int length = Util.us2i(controlRecvBuf.getShort(0));
                         length++;
                         if (length > CONTROL_LENGTH_MAX) {
                             throw new ProtocolFailure("Message length " + length + " exceeded cap " + CONTROL_LENGTH_MAX);
                         }
                         length += MACBYTES;
-                        controlRecvBuf.limit(LENGTH_SIZE + length);
-                        read(controlChannel, controlRecvBuf);
-                    }
-                    //TODO handle the message
-                    if (!controlRecvBuf.hasRemaining()) {
-                        // TODO deal with initial exchange where we may not have a type field.
+                        if (controlRecvBuf.position() < LENGTH_SIZE + length) {
+                            break;
+                        }
+                        //TODO handle the message
+                        controlRecvBuf.flip();
                         int type = Util.ub2i(controlRecvBuf.get(LENGTH_SIZE));
                         controlRecvBuf.position(LENGTH_SIZE + 1);
                         if (type == MTYPE_ACK_SERVER) {
@@ -293,20 +242,27 @@ public class Session implements Runnable {
                         } else {
                             throw new ProtocolFailure("Illegal server message type " + type);
                         }
+                        controlRecvBuf.compact();
                     }
                 }
                 if (dataKey.isReadable()) {
                     read(dataChannel, dataRecvBuf);
-                    if (!dataRecvBuf.hasRemaining() && dataRecvBuf.limit() == LENGTH_SIZE) {
-                        int length = us2i(dataRecvBuf.getShort(0));
-                        length++;
-                        length += DATA_HEADER_SIZE + MACBYTES;
-                        dataRecvBuf.limit(LENGTH_SIZE + length);
-                        read(dataChannel, dataRecvBuf);
+                    while (controlRecvBuf.position() >= LENGTH_SIZE) {
+                        int length = Util.us2i(dataRecvBuf.getShort(0));
+                        length += MIN_LENGTH;
+                        if (dataRecvBuf.position() < LENGTH_SIZE + length) {
+                            break;
+                        }
+                        dataRecvBuf.flip();
+                        //TODO handle the message
+                        // XXX must drain the whole message
+                        dataRecvBuf.compact();
                     }
-                    // TODO handle the message
                 }
                 if (controlKey.isWritable()) {
+                    if (controlSendBuf.hasRemaining()) {
+                        write(controlChannel, controlSendBuf);
+                    }
                     while (!messagesToSend.isEmpty() && !controlSendBuf.hasRemaining()) {
                         controlSendBuf.position(LENGTH_SIZE);
                         controlSendBuf.limit(controlSendBuf.capacity());
@@ -355,6 +311,9 @@ public class Session implements Runnable {
                     }
                 }
                 if (dataKey.isWritable()) {
+                    if (dataSendBuf.hasRemaining()) {
+                        write(dataChannel, dataSendBuf);
+                    }
                     while (!dataToSend.isEmpty() && !dataSendBuf.hasRemaining()) {
                         SendingData data = dataToSend.remove();
                         if (data.channel == null) {
