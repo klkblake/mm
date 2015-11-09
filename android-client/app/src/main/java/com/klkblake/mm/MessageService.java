@@ -91,7 +91,7 @@ public final class MessageService extends Service implements Runnable, SessionLi
 
     // TODO are these callbacks actually useful as is?
     @Override
-    public void receivedMessage(int id, long timestamp, boolean author, String message) {
+    public void receivedMessage(long id, long timestamp, boolean author, String message) {
         messageCount = session.getMessageCount();
         synchronized (monitor) {
             updateRequired = true;
@@ -100,7 +100,7 @@ public final class MessageService extends Service implements Runnable, SessionLi
     }
 
     @Override
-    public void receivedMessage(int id, long timestamp, boolean author, int numPhotos) {
+    public void receivedMessage(long id, long timestamp, boolean author, int numPhotos) {
         messageCount = session.getMessageCount();
         synchronized (monitor) {
             updateRequired = true;
@@ -109,7 +109,7 @@ public final class MessageService extends Service implements Runnable, SessionLi
     }
 
     @Override
-    public void receivedPart(int messageID, int partID) {
+    public void receivedPart(long messageID, int partID) {
         synchronized (monitor) {
             updateRequired = true;
             monitor.notify();

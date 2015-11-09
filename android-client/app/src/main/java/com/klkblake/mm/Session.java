@@ -131,15 +131,19 @@ public class Session implements Runnable {
         storeMessage(messageID, timestamp, author, TYPE_PHOTOS, photoCounts.count - 1);
     }
 
-    private File fileForPart(long messageID, int partID, boolean isSingle) throws FilesystemFailure {
-        if (isSingle) {
-            return new File(photosDir, messageID + ".jpg");
+    private void storePhoto(SendingData data) throws FilesystemFailure {
+        File file;
+        if (data.isSingle) {
+            file = new File(photosDir, data.messageID + ".jpg");
         } else {
-            File dir = new File(photosDir, Long.toString(messageID));
+            File dir = new File(photosDir, Long.toString(data.messageID));
             if (!dir.mkdir() && !dir.isDirectory()) {
                 throw new FilesystemFailure("Could not create directory " + dir.getAbsolutePath());
             }
-            return new File(dir, partID + ".jpg");
+            file = new File(dir, data.partID + ".jpg");
+        }
+        if (!data.photo.renameTo(file)) {
+            throw new FilesystemFailure("Could not move file " + file);
         }
     }
 
@@ -236,9 +240,7 @@ public class Session implements Runnable {
                                 throw new ProtocolFailure(String.format("Received out of order DACK. Got %d:%d, expected %d:%d",
                                         id, part, data.messageID, data.partID));
                             }
-                            if (!data.photo.renameTo(fileForPart(data.messageID, data.partID, data.isSingle))) {
-                                throw new FilesystemFailure("Couldn't move part to appropriate file");
-                            }
+                            storePhoto(data);
                             listener.receivedPart(data.messageID, data.partID);
                         } else {
                             throw new ProtocolFailure("Illegal server message type " + type);
@@ -271,7 +273,6 @@ public class Session implements Runnable {
                         SendingMessage message = messagesToSend.remove();
                         messagesPending.add(message);
                         if (message.type == TYPE_TEXT) {
-                            // TODO use CharsetEncoder?
                             byte[] encoded = utf8Encode(message.message);
                             // TODO: BIGTEXT
                             ASSERT(encoded.length <= MAX_SHORT_TEXT, "Message too long");
@@ -417,6 +418,7 @@ public class Session implements Runnable {
     }
 
     public Message getMessage(int id) {
+        // XXX threading? Is this remotely safe?
         long timestamp = timestamps.data[id];
         boolean author = authors.data[id];
         int tyindex = indexes.data[id];
