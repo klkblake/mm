@@ -20,6 +20,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import static com.klkblake.mm.Message.TYPE_PHOTOS;
 import static com.klkblake.mm.Message.TYPE_TEXT;
 import static com.klkblake.mm.Util.min;
+import static com.klkblake.mm.Util.ub2i;
+import static com.klkblake.mm.Util.us2i;
 import static com.klkblake.mm.Util.utf8Decode;
 import static com.klkblake.mm.Util.utf8Encode;
 import static java.nio.channels.SelectionKey.OP_READ;
@@ -29,15 +31,22 @@ import static java.nio.channels.SelectionKey.OP_WRITE;
  * Created by kyle on 15/10/15.
  */
 public class Session implements Runnable {
-    public static final int CONTROL_LENGTH_SIZE = 3;
-    public static final int CONTROL_HEADER_SIZE = CONTROL_LENGTH_SIZE + 1;
-    public static final int DATA_LENGTH_SIZE = 2;
-    public static final int DATA_HEADER_SIZE = DATA_LENGTH_SIZE + 8;
-    public static final int CONTROL_FOOTER_SIZE = 1;
+    public static final int LENGTH_SIZE = 2;
+    public static final int DATA_HEADER_SIZE = 11;
+    public static final int CONTROL_LENGTH_MAX = 1024;
+    public static final int MAX_CHUNK_SIZE = 65536;
+    private static final int MACBYTES = 16; // TODO get this from the crypto library
     // TODO Always have all past messages loaded
     public static final int TYPE_SHIFT = 29;
     public static final int INDEX_MASK = (1 << TYPE_SHIFT) - 1;
-    public static final int CHUNK_SIZE = 65536;
+    private static final int MTYPE_ACK_SERVER = 0;
+    private static final int MTYPE_DACK_SERVER = 1;
+    public static final int MAX_PARTS = 251;
+    public static final int MAX_SHORT_TEXT = 1006;
+    private static final byte MTYPE_TEXT_MESSAGE_CLIENT = 2;
+    private static final byte MTYPE_PART_MESSAGE_CLIENT = 3;
+    private static final byte PTYPE_PHOTOS = 1;
+    private static final int MIN_LENGTH = 1 + MACBYTES;
 
     private volatile boolean dead = true;
     private Selector selector;
@@ -45,10 +54,10 @@ public class Session implements Runnable {
     private SocketChannel dataChannel;
     private SelectionKey controlKey;
     private SelectionKey dataKey;
-    private ByteBuffer controlSendBuf = ByteBuffer.allocate(CONTROL_HEADER_SIZE + 999 + CONTROL_FOOTER_SIZE);
-    private ByteBuffer controlRecvBuf = ByteBuffer.allocate(CONTROL_HEADER_SIZE + 999 + CONTROL_FOOTER_SIZE);
-    private ByteBuffer dataSendBuf = ByteBuffer.allocate(DATA_HEADER_SIZE + CHUNK_SIZE);
-    private ByteBuffer dataRecvBuf = ByteBuffer.allocate(DATA_HEADER_SIZE + CHUNK_SIZE);
+    private ByteBuffer controlSendBuf = ByteBuffer.allocate(LENGTH_SIZE + 1024 + MACBYTES);
+    private ByteBuffer controlRecvBuf = ByteBuffer.allocate(LENGTH_SIZE + 1024 + MACBYTES);
+    private ByteBuffer dataSendBuf = ByteBuffer.allocate(LENGTH_SIZE + DATA_HEADER_SIZE + MAX_CHUNK_SIZE + MACBYTES);
+    private ByteBuffer dataRecvBuf = ByteBuffer.allocate(LENGTH_SIZE + DATA_HEADER_SIZE + MAX_CHUNK_SIZE + MACBYTES);
     // TODO make sure to track pending data transfer set so we can resume after net drop
 
     private final ConcurrentLinkedQueue<SendingMessage> messagesToSend = new ConcurrentLinkedQueue<>();
@@ -102,35 +111,35 @@ public class Session implements Runnable {
         dataSendBuf.rewind();
         dataRecvBuf.rewind();
         controlSendBuf.limit(0);
-        controlRecvBuf.limit(CONTROL_LENGTH_SIZE);
+        controlRecvBuf.limit(0);
         dataSendBuf.limit(0);
-        dataRecvBuf.limit(DATA_LENGTH_SIZE);
+        dataRecvBuf.limit(0);
 
         dead = false;
         new Thread(this, "Session Thread").start();
     }
 
-    private void storeMessage(int messageID, long timestamp, boolean author, int type, int index) {
+    private void storeMessage(long messageID, long timestamp, boolean author, int type, int index) {
         timestamps.set(messageID, timestamp);
         authors.set(messageID, author);
         indexes.set(messageID, type << Session.TYPE_SHIFT | index & Session.INDEX_MASK);
     }
 
-    private void storeMessage(int messageID, long timestamp, boolean author, String message) {
+    private void storeMessage(long messageID, long timestamp, boolean author, String message) {
         texts.add(utf8Encode(message));
         storeMessage(messageID, timestamp, author, TYPE_TEXT, texts.size() - 1);
     }
 
-    private void storePhotos(int messageID, long timestamp, boolean author, short photoCount) {
+    private void storePhotos(long messageID, long timestamp, boolean author, short photoCount) {
         photoCounts.add(photoCount);
         storeMessage(messageID, timestamp, author, TYPE_PHOTOS, photoCounts.count - 1);
     }
 
-    private File fileForPart(int messageID, int partID, boolean isSingle) throws FilesystemFailure {
+    private File fileForPart(long messageID, int partID, boolean isSingle) throws FilesystemFailure {
         if (isSingle) {
             return new File(photosDir, messageID + ".jpg");
         } else {
-            File dir = new File(photosDir, Integer.toString(messageID));
+            File dir = new File(photosDir, Long.toString(messageID));
             if (!dir.mkdir() && !dir.isDirectory()) {
                 throw new FilesystemFailure("Could not create directory " + dir.getAbsolutePath());
             }
@@ -197,6 +206,12 @@ public class Session implements Runnable {
         }
     }
 
+    private static void ASSERT(boolean cond, String message) throws AssertionFailure {
+        if (!cond) {
+            throw new AssertionFailure(message);
+        }
+    }
+
     @Override
     public void run() {
         Failure failure = null;
@@ -208,7 +223,7 @@ public class Session implements Runnable {
                 dataKey = dataChannel.register(selector, OP_READ);
             } catch (IOException e) {
                 throw new SocketFailure(e);
-            }
+            } // TODO implement initial exchange
             while (!dead) {
                 try {
                     selector.select();
@@ -223,36 +238,31 @@ public class Session implements Runnable {
                 }
                 if (controlKey.isReadable()) {
                     read(controlChannel, controlRecvBuf);
-                    if (!controlRecvBuf.hasRemaining() && controlRecvBuf.limit() == CONTROL_LENGTH_SIZE) {
-                        int length = 0;
-                        controlRecvBuf.rewind();
-                        for (int i = 0; i < CONTROL_LENGTH_SIZE; i++) {
-                            char c = (char) controlRecvBuf.get(); // TODO unsigned widen
-                            if (c < '0' || c > '9') {
-                                throw new ProtocolFailure("Expected digit, got '" + c + "'");
-                            }
-                            length *= 10;
-                            length += c - '0';
+                    if (!controlRecvBuf.hasRemaining() && controlRecvBuf.limit() == LENGTH_SIZE) {
+                        int length = Util.us2i(controlRecvBuf.getShort(0));
+                        length++;
+                        if (length > CONTROL_LENGTH_MAX) {
+                            throw new ProtocolFailure("Message length " + length + " exceeded cap " + CONTROL_LENGTH_MAX);
                         }
-                        if (length == 0) {
-                            throw new ProtocolFailure("Zero length message");
-                        }
-                        controlRecvBuf.limit(CONTROL_HEADER_SIZE + length + CONTROL_FOOTER_SIZE);
+                        length += MACBYTES;
+                        controlRecvBuf.limit(LENGTH_SIZE + length);
                         read(controlChannel, controlRecvBuf);
                     }
                     //TODO handle the message
                     if (!controlRecvBuf.hasRemaining()) {
-                        if (controlRecvBuf.limit() == 4 + 4 + 8 + 1 + 16 + 1) {
-                            controlRecvBuf.position(3);
-                            expect(' ');
-                            expect('A');
-                            expect('C');
-                            expect('K');
-                            expect(' ');
-                            int id = (int) decodeHex(controlRecvBuf, 8);
-                            expect(' ');
-                            long timestamp = decodeHex(controlRecvBuf, 16);
-                            expect('\n');
+                        // TODO deal with initial exchange where we may not have a type field.
+                        int type = Util.ub2i(controlRecvBuf.get(LENGTH_SIZE));
+                        controlRecvBuf.position(LENGTH_SIZE + 1);
+                        if (type == MTYPE_ACK_SERVER) {
+                            long id = controlRecvBuf.getLong();
+                            long timestamp = controlRecvBuf.getLong();
+                            if (id < 0) {
+                                throw new ProtocolFailure("Received ACK with negative message ID");
+                            }
+                            if (timestamp < 0) {
+                                throw new ProtocolFailure("Received ACK with negative timestamp ID");
+                            }
+                            ASSERT(id <= Integer.MAX_VALUE, "message ID too big"); // XXX deal with this properly
                             SendingMessage message = messagesPending.poll();
                             if (message == null) {
                                 throw new ProtocolFailure("Received ACK with no messages pending");
@@ -268,19 +278,11 @@ public class Session implements Runnable {
                                 storePhotos(id, timestamp, Message.AUTHOR_US, (short) message.photos.length);
                                 listener.receivedMessage(id, timestamp, Message.AUTHOR_US, message.photos.length);
                             }
-                        } else if (controlRecvBuf.limit() == 4 + 5 + 8 + 1 + 4 + 1) {
-                            controlRecvBuf.position(3);
-                            expect(' ');
-                            expect('D');
-                            expect('A');
-                            expect('C');
-                            expect('K');
-                            expect(' ');
-                            int id = (int) decodeHex(controlRecvBuf, 8);
-                            expect(' ');
-                            int part = (int) decodeHex(controlRecvBuf, 2);
-                            expect('\n');
-                            SendingData data = dataPending.get((long) id << 32 | part);
+                        } else if (type == MTYPE_DACK_SERVER) {
+                            long id = controlRecvBuf.getLong();
+                            int part = ub2i(controlRecvBuf.get());
+                            ASSERT(id <= Integer.MAX_VALUE, "message ID too big"); // XXX deal with this properly
+                            SendingData data = dataPending.get(id << 8 | part); // XXX this is terrible and wrong
                             if (data == null) {
                                 throw new ProtocolFailure("Received DACK for non-pending data");
                             }
@@ -288,57 +290,40 @@ public class Session implements Runnable {
                                 throw new FilesystemFailure("Couldn't move part to appropriate file");
                             }
                             listener.receivedPart(data.messageID, data.partID);
+                        } else {
+                            throw new ProtocolFailure("Illegal server message type " + type);
                         }
                     }
                 }
                 if (dataKey.isReadable()) {
                     read(dataChannel, dataRecvBuf);
-                    if (!dataRecvBuf.hasRemaining() && dataRecvBuf.limit() == DATA_LENGTH_SIZE) {
-                        int length = 0;
-                        dataRecvBuf.rewind();
-                        for (int i = 0; i < DATA_LENGTH_SIZE; i++) {
-                            int c = dataRecvBuf.get();
-                            length |= c << (i * 8);
-                        }
+                    if (!dataRecvBuf.hasRemaining() && dataRecvBuf.limit() == LENGTH_SIZE) {
+                        int length = us2i(dataRecvBuf.getShort(0));
                         length++;
-                        dataRecvBuf.limit(DATA_HEADER_SIZE + length);
+                        length += DATA_HEADER_SIZE + MACBYTES;
+                        dataRecvBuf.limit(LENGTH_SIZE + length);
                         read(dataChannel, dataRecvBuf);
                     }
                     // TODO handle the message
                 }
                 if (controlKey.isWritable()) {
                     while (!messagesToSend.isEmpty() && !controlSendBuf.hasRemaining()) {
+                        controlSendBuf.position(LENGTH_SIZE);
+                        controlSendBuf.limit(controlSendBuf.capacity());
+                        boolean doMAC = true; // XXX false for initial messages because we don't do encryption for them
                         SendingMessage message = messagesToSend.remove();
                         messagesPending.add(message);
                         if (message.type == TYPE_TEXT) {
                             // TODO use CharsetEncoder?
                             byte[] encoded = utf8Encode(message.message);
-                            // TODO enforce limits
-                            for (int i = 0; i < encoded.length; i++) {
-                                if (encoded[i] == '\n') {
-                                    encoded[i] = 127;
-                                }
-                                if (encoded[i] < ' ' && encoded[i] != '\t') {
-                                    throw new AssertionFailure("Illegal character in message");
-                                }
-                            }
                             // TODO: BIGTEXT
-                            if (encoded.length > 713) {
-                                throw new AssertionFailure("Message too long");
-                            }
-                            int totalLength = encoded.length + 5;
-                            putLength(totalLength);
-                            controlSendBuf.put(new byte[]{'T', 'E', 'X', 'T', ' '});
+                            ASSERT(encoded.length <= MAX_SHORT_TEXT, "Message too long");
+                            controlSendBuf.put(MTYPE_TEXT_MESSAGE_CLIENT);
                             controlSendBuf.put(encoded);
-                            controlSendBuf.put((byte) '\n');
-                            write(controlChannel, controlSendBuf);
                         } else if (message.type == Message.TYPE_PHOTOS) {
-                            if (message.photos.length > 79) {
-                                throw new AssertionFailure("Too many photos");
-                            }
-                            int totalLength = 6 + 9 * message.photos.length;
-                            putLength(totalLength);
-                            controlSendBuf.put(new byte[]{'P', 'H', 'O', 'T', 'O'});
+                            ASSERT(message.photos.length <= MAX_PARTS, "Too many photos");
+                            controlSendBuf.put(MTYPE_PART_MESSAGE_CLIENT);
+                            controlSendBuf.put(PTYPE_PHOTOS);
                             for (int i = 0; i < message.photos.length; i++) {
                                 controlSendBuf.put((byte) ' ');
                                 // XXX do we want to treat the file not existing here as a recoverable error?
@@ -347,11 +332,26 @@ public class Session implements Runnable {
                                 if (message.photoSizes[i] == 0) {
                                     throw new FilesystemFailure("Part file does not exist");
                                 }
-                                putHexSize((int) message.photoSizes[i]);
+                                controlSendBuf.putInt((int) message.photoSizes[i]);
                             }
-                            controlSendBuf.put((byte) '\n');
-                            write(controlChannel, controlSendBuf);
+                        } else {
+                            throw new ProtocolFailure("Illegal client message type " + message.type);
                         }
+                        if (doMAC) {
+                            // XXX replace with real crypto stuff
+                            for (int i = 0; i < MACBYTES; i++) {
+                                controlSendBuf.put((byte) 0);
+                            }
+                        } else {
+                            while (controlSendBuf.position() < LENGTH_SIZE + MIN_LENGTH) {
+                                controlSendBuf.put((byte) 0);
+                            }
+                        }
+                        int length = controlSendBuf.position() - LENGTH_SIZE - MIN_LENGTH;
+                        ASSERT(length >= 0 && length <= Short.MAX_VALUE, "message length outside bounds");
+                        controlSendBuf.putShort(0, (short) length);
+                        controlSendBuf.flip();
+                        write(controlChannel, controlSendBuf);
                     }
                 }
                 if (dataKey.isWritable()) {
@@ -364,22 +364,34 @@ public class Session implements Runnable {
                                 throw new FilesystemFailure(e);
                             }
                         }
-                        long remaining = data.photoSize - data.chunksSent * CHUNK_SIZE;
-                        long sizeToSend = min(remaining, CHUNK_SIZE);
+                        long remaining = data.photoSize - data.chunksSent * MAX_CHUNK_SIZE;
+                        int sizeToSend = (int) min(remaining, MAX_CHUNK_SIZE);
                         // TODO seriously consider our limits/sizes.
-                        dataSendBuf.putShort((short) (sizeToSend - 1));
-                        dataSendBuf.putInt(data.messageID);
-                        dataSendBuf.putShort((short) data.partID);
+                        dataSendBuf.clear();
+                        int length = sizeToSend - MIN_LENGTH;
+                        // We either (a) will do the MAC, or (b) are sending DataClientHello,
+                        // which is known to exceed MIN_LENGTH.
+                        ASSERT(length >= 0 && length <= Short.MAX_VALUE, "message length outside bounds");
+                        dataSendBuf.putShort((short) length);
+                        dataSendBuf.putLong(data.messageID);
+                        dataSendBuf.put((byte) data.partID);
                         dataSendBuf.putShort((short) data.chunksSent++);
+                        dataSendBuf.limit(dataSendBuf.position() + sizeToSend);
                         try {
                             data.channel.read(dataSendBuf);
                         } catch (IOException e) {
                             throw new FilesystemFailure(e);
                         }
+                        dataSendBuf.limit(dataSendBuf.limit() + MACBYTES);
+                        // XXX only do for encrypted messages
+                        // XXX replace with real crypto stuff
+                        for (int i = 0; i < MACBYTES; i++) {
+                            controlSendBuf.put((byte) 0);
+                        }
                         write(dataChannel, dataSendBuf);
-                        if (data.chunksSent * CHUNK_SIZE >= data.photoSize) {
+                        if (data.chunksSent * MAX_CHUNK_SIZE >= data.photoSize) {
                             // XXX this breaks if we bump up the max messageID
-                            dataPending.put((long) data.messageID << 32 | data.partID, data);
+                            dataPending.put(data.messageID << 8 | data.partID, data);
                             try {
                                 data.channel.close();
                             } catch (IOException ignored) {

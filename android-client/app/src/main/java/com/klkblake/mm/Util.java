@@ -40,4 +40,12 @@ public class Util {
     public static String utf8Decode(byte[] bytes) {
         return new String(bytes, StandardCharsets.UTF_8);
     }
+
+    public static int us2i(short x) {
+        return x & 0xffff;
+    }
+
+    public static int ub2i(byte x) {
+        return x & 0xff;
+    }
 }

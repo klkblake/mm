@@ -148,7 +148,7 @@ but the top bit must be clear.
     struct DAckServer {
         u8 type = 1;
         u63 message_id;
-        u63 part;
+        u8 part;
     };
 
 This is sent by the server in response to fully receiving a message part (in

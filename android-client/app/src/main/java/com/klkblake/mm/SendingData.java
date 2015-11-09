@@ -3,13 +3,13 @@ package com.klkblake.mm;
 import java.io.File;
 import java.nio.channels.FileChannel;
 
-import static com.klkblake.mm.Session.CHUNK_SIZE;
+import static com.klkblake.mm.Session.MAX_CHUNK_SIZE;
 
 /**
  * Created by kyle on 23/10/15.
  */
 public class SendingData implements Comparable<SendingData> {
-    public final int messageID;
+    public final long messageID;
     public final int partID;
     public final File photo;
     public final long photoSize;
@@ -18,7 +18,7 @@ public class SendingData implements Comparable<SendingData> {
     public int chunksSent = 0;
     public FileChannel channel;
 
-    public SendingData(int messageID, int partID, File photo, long photoSize, boolean isSingle) {
+    public SendingData(long messageID, int partID, File photo, long photoSize, boolean isSingle) {
         this.messageID = messageID;
         this.partID = partID;
         this.photo = photo;
@@ -28,6 +28,6 @@ public class SendingData implements Comparable<SendingData> {
 
     @Override
     public int compareTo(SendingData another) {
-        return Long.compare(photoSize - chunksSent * CHUNK_SIZE, another.photoSize - another.chunksSent * CHUNK_SIZE);
+        return Long.compare(photoSize - chunksSent * MAX_CHUNK_SIZE, another.photoSize - another.chunksSent * MAX_CHUNK_SIZE);
     }
 }
