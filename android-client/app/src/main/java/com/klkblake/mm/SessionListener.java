@@ -9,6 +9,7 @@ public interface SessionListener {
 
     void receivedPart(long messageID, int partID);
 
+    void authenticationFailed(boolean isControlChannel);
     void networkFailed(Throwable cause);
     void protocolViolation(String message);
     void filesystemFailed(Exception exception);

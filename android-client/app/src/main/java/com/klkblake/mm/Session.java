@@ -1,6 +1,7 @@
 package com.klkblake.mm;
 
 import com.klkblake.mm.Failure.AssertionFailure;
+import com.klkblake.mm.Failure.AuthenticationFailure;
 import com.klkblake.mm.Failure.FilesystemFailure;
 import com.klkblake.mm.Failure.ProtocolFailure;
 import com.klkblake.mm.Failure.SocketFailure;
@@ -164,7 +165,10 @@ public class Session implements Runnable {
                         int end = controlRecvBuf.position();
                         controlRecvBuf.position(LENGTH_SIZE);
                         controlRecvBuf.limit(LENGTH_SIZE + length);
-                        crypto.decrypt(controlRecvBuf, controlServerCounter++ * 2 + 1);
+                        boolean verified = crypto.decrypt(controlRecvBuf, controlServerCounter++ * 2 + 1);
+                        if (!verified) {
+                            throw new AuthenticationFailure(true);
+                        }
                         //TODO handle the message
                         int type = ub2i(controlRecvBuf.get());
                         if (type == MTYPE_ACK_SERVER) {
@@ -223,7 +227,10 @@ public class Session implements Runnable {
                         int end = dataRecvBuf.position();
                         dataRecvBuf.position(LENGTH_SIZE);
                         dataRecvBuf.limit(LENGTH_SIZE + length);
-                        crypto.decrypt(dataRecvBuf, ~(dataServerCounter++ * 2 + 1));
+                        boolean verified = crypto.decrypt(dataRecvBuf, ~(dataServerCounter++ * 2 + 1));
+                        if (!verified) {
+                            throw new AuthenticationFailure(false);
+                        }
                         //TODO handle the message
                         dataRecvBuf.limit(end);
                         dataRecvBuf.position(LENGTH_SIZE + length);

@@ -14,6 +14,20 @@ abstract class Failure extends Exception {
 
     public abstract void notifyListener(SessionListener listener);
 
+    static class AuthenticationFailure extends Failure {
+        private final boolean isControlChannel;
+
+        public AuthenticationFailure(boolean isControlChannel) {
+            super("Someone is attempting to intercept our connection");
+            this.isControlChannel = isControlChannel;
+        }
+
+        @Override
+        public void notifyListener(SessionListener listener) {
+            listener.authenticationFailed(isControlChannel);
+        }
+    }
+
     static class ProtocolFailure extends Failure {
         public ProtocolFailure(String message) {
             super(message);

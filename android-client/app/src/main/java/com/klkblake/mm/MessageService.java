@@ -119,6 +119,12 @@ public final class MessageService extends Service implements Runnable, SessionLi
     }
 
     @Override
+    public void authenticationFailed(boolean isControlChannel) {
+        String channel = isControlChannel ? "control" : "data";
+        Log.e(TAG, "Authentication failed! Probable MITM attack on " + channel + " channel");
+    }
+
+    @Override
     public void networkFailed(Throwable cause) {
         // TODO report somehow
         Log.i(TAG, "Network issue", cause);

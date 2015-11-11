@@ -22,7 +22,12 @@ model {
 
     android.ndk {
         moduleName = "mm-crypto"
-        ldFlags += '-llog'
+        // The includes are the same for all compiled versions
+        CFlags += ['-std=c11', '-Wall', "-I${file("../../libsodium/libsodium-android-armv7-a/include")}".toString()]
+        // The internet seems to indicate that our search path should automatically include these
+        ldFlags += ['-Lsrc/main/jniLibs/armeabi-v7a', '-Lsrc/main/jniLibs/x86']
+        ldLibs += 'sodium'
+        abiFilters += ['armeabi-v7a', 'x86']
     }
 }
 

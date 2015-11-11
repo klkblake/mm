@@ -29,12 +29,13 @@ public final class Crypto {
 
     private static native long create(byte[] pubkey, byte[] seckey);
     private static native void encrypt(long ptr, ByteBuffer buf, int position, int limit, long counter);
-    private static native void decrypt(long ptr, ByteBuffer buf, int position, int limit, long counter);
+    private static native boolean decrypt(long ptr, ByteBuffer buf, int position, int limit, long counter);
     private static native void destroy(long ptr);
 
     public Crypto() {
         byte[] pubkey = getKey("key.pub", PUBLICKEYBYTES);
         byte[] seckey = getKey("key.sec", SECRETKEYBYTES);
+        // XXX This is wrong! We want the *server's* public key here
         ptr = create(pubkey, seckey);
     }
 
@@ -47,9 +48,10 @@ public final class Crypto {
         buf.limit(buf.limit() + MACBYTES);
     }
 
-    public void decrypt(ByteBuffer buf, long counter) {
-        decrypt(ptr, buf, buf.position(), buf.limit(), counter);
+    public boolean decrypt(ByteBuffer buf, long counter) {
+        boolean result = decrypt(ptr, buf, buf.position(), buf.limit(), counter);
         buf.limit(buf.limit() - MACBYTES);
+        return result;
     }
 
     public void close() {
