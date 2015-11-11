@@ -34,7 +34,8 @@ version 0.
 Nonces are random 8 byte values. The final computed nonce for a message is
 nonce1 followed by nonce2 followed by a message counter, where the client uses
 even numbers and the server uses odd numbers. e.g. The third message the client
-has sent this session has a counter of 5.
+has sent this session has a counter of 4. The data channel has a separate
+counter that functions the same except that it is bitwise negated.
 
 The client transmits it's public key. This serves not only as a means of
 encryption, it also identifies the user. The client is expected to already know

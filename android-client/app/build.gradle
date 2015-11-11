@@ -19,6 +19,11 @@ model {
             proguardFiles += file('proguard-rules.pro')
         }
     }
+
+    android.ndk {
+        moduleName = "mm-crypto"
+        ldFlags += '-llog'
+    }
 }
 
 dependencies {

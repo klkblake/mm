@@ -51,10 +51,10 @@ public class Session implements Runnable {
     private SocketChannel dataChannel;
     private SelectionKey controlKey;
     private SelectionKey dataKey;
-    private ByteBuffer controlSendBuf = ByteBuffer.allocate(LENGTH_SIZE + 1024 + MACBYTES);
-    private ByteBuffer controlRecvBuf = ByteBuffer.allocate(LENGTH_SIZE + 1024 + MACBYTES);
-    private ByteBuffer dataSendBuf = ByteBuffer.allocate(LENGTH_SIZE + DATA_HEADER_SIZE + MAX_CHUNK_SIZE + MACBYTES);
-    private ByteBuffer dataRecvBuf = ByteBuffer.allocate(LENGTH_SIZE + DATA_HEADER_SIZE + MAX_CHUNK_SIZE + MACBYTES);
+    private ByteBuffer controlSendBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + 1024 + MACBYTES);
+    private ByteBuffer controlRecvBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + 1024 + MACBYTES);
+    private ByteBuffer dataSendBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + DATA_HEADER_SIZE + MAX_CHUNK_SIZE + MACBYTES);
+    private ByteBuffer dataRecvBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + DATA_HEADER_SIZE + MAX_CHUNK_SIZE + MACBYTES);
     // TODO make sure to track pending data transfer set so we can resume after net drop
 
     private final ConcurrentLinkedQueue<SendingMessage> messagesToSend = new ConcurrentLinkedQueue<>();
@@ -126,15 +126,23 @@ public class Session implements Runnable {
     @Override
     public void run() {
         Failure failure = null;
+        Crypto crypto = new Crypto();
         try {
             try {
                 controlChannel = SocketChannel.open(new InetSocketAddress("klkblake.com", 29192));
                 dataChannel = SocketChannel.open(new InetSocketAddress("klkblake.com", 29292));
+                controlChannel.configureBlocking(false);
+                dataChannel.configureBlocking(false);
                 controlKey = controlChannel.register(selector, OP_READ);
                 dataKey = dataChannel.register(selector, OP_READ);
             } catch (IOException e) {
                 throw new SocketFailure(e);
             } // TODO implement initial exchange
+            long nonce2 = 0;
+            long controlClientCounter = 0;
+            long dataClientCounter = 0;
+            long controlServerCounter = 0;
+            long dataServerCounter = 0;
             while (!dead) {
                 try {
                     selector.select();
@@ -153,10 +161,12 @@ public class Session implements Runnable {
                         if (controlRecvBuf.position() < LENGTH_SIZE + length) {
                             break;
                         }
+                        int end = controlRecvBuf.position();
+                        controlRecvBuf.position(LENGTH_SIZE);
+                        controlRecvBuf.limit(LENGTH_SIZE + length);
+                        crypto.decrypt(controlRecvBuf, controlServerCounter++ * 2 + 1);
                         //TODO handle the message
-                        controlRecvBuf.flip();
-                        int type = ub2i(controlRecvBuf.get(LENGTH_SIZE));
-                        controlRecvBuf.position(LENGTH_SIZE + 1);
+                        int type = ub2i(controlRecvBuf.get());
                         if (type == MTYPE_ACK_SERVER) {
                             long id = controlRecvBuf.getLong();
                             long timestamp = controlRecvBuf.getLong();
@@ -197,6 +207,8 @@ public class Session implements Runnable {
                         } else {
                             throw new ProtocolFailure("Illegal server message type " + type);
                         }
+                        controlRecvBuf.limit(end);
+                        controlRecvBuf.position(LENGTH_SIZE + length);
                         controlRecvBuf.compact();
                     }
                 }
@@ -208,9 +220,13 @@ public class Session implements Runnable {
                         if (dataRecvBuf.position() < LENGTH_SIZE + length) {
                             break;
                         }
-                        dataRecvBuf.flip();
+                        int end = dataRecvBuf.position();
+                        dataRecvBuf.position(LENGTH_SIZE);
+                        dataRecvBuf.limit(LENGTH_SIZE + length);
+                        crypto.decrypt(dataRecvBuf, ~(dataServerCounter++ * 2 + 1));
                         //TODO handle the message
-                        // XXX must drain the whole message
+                        dataRecvBuf.limit(end);
+                        dataRecvBuf.position(LENGTH_SIZE + length);
                         dataRecvBuf.compact();
                     }
                 }
@@ -249,19 +265,16 @@ public class Session implements Runnable {
                             throw new ProtocolFailure("Illegal client message type " + message.type);
                         }
                         if (doMAC) {
-                            // XXX replace with real crypto stuff
-                            for (int i = 0; i < MACBYTES; i++) {
-                                controlSendBuf.put((byte) 0);
-                            }
+                            controlSendBuf.limit(controlSendBuf.position());
+                            controlSendBuf.position(LENGTH_SIZE);
+                            crypto.encrypt(controlSendBuf, controlClientCounter++ * 2);
                         } else {
-                            while (controlSendBuf.position() < LENGTH_SIZE + MIN_LENGTH) {
-                                controlSendBuf.put((byte) 0);
-                            }
+                            controlSendBuf.flip();
                         }
-                        int length = controlSendBuf.position() - LENGTH_SIZE - MIN_LENGTH;
+                        int length = controlSendBuf.limit() - LENGTH_SIZE - MIN_LENGTH;
                         ASSERT(length >= 0 && length <= Short.MAX_VALUE, "message length outside bounds");
                         controlSendBuf.putShort(0, (short) length);
-                        controlSendBuf.flip();
+                        controlSendBuf.rewind();
                         write(controlChannel, controlSendBuf);
                     }
                 }
@@ -292,15 +305,14 @@ public class Session implements Runnable {
                         dataSendBuf.limit(dataSendBuf.position() + sizeToSend);
                         try {
                             data.channel.read(dataSendBuf);
+                            ASSERT(!dataSendBuf.hasRemaining(), "read was non-blocking!");
                         } catch (IOException e) {
                             throw new FilesystemFailure(e);
                         }
-                        dataSendBuf.limit(dataSendBuf.limit() + MACBYTES);
                         // XXX only do for encrypted messages
-                        // XXX replace with real crypto stuff
-                        for (int i = 0; i < MACBYTES; i++) {
-                            controlSendBuf.put((byte) 0);
-                        }
+                        dataSendBuf.position(LENGTH_SIZE);
+                        crypto.encrypt(dataSendBuf, ~(dataClientCounter++ * 2));
+                        dataSendBuf.rewind();
                         write(dataChannel, dataSendBuf);
                         if (data.chunksSent * MAX_CHUNK_SIZE >= data.photoSize) {
                             dataPending.add(data);
@@ -345,6 +357,7 @@ public class Session implements Runnable {
         if (dataKey != null) {
             dataKey.cancel();
         }
+        crypto.close();
         messagesPending.clear();
         dataToSend.clear();
         dataPending.clear();
