@@ -182,6 +182,7 @@ public class Session implements Runnable {
         state = STATE_SEND_HEL;
         try {
             try {
+                // TODO notify app on connection established
                 controlChannel = SocketChannel.open(new InetSocketAddress("klkblake.com", 29192));
                 dataChannel = SocketChannel.open(new InetSocketAddress("klkblake.com", 29292));
                 controlChannel.configureBlocking(false);

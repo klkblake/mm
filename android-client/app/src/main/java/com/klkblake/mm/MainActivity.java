@@ -138,9 +138,10 @@ public class MainActivity extends AppActivity {
             notifyServiceNotConnected();
             return;
         }
-        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         // TODO we need to make sure we actually handle PNGs at least
         intent.setType("image/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.putExtra(Intent.EXTRA_LOCAL_ONLY, true);
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         if (intent.resolveActivity(getPackageManager()) != null) {

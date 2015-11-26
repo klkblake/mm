@@ -4,9 +4,11 @@ import android.app.Service;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.IBinder;
+import android.os.ParcelFileDescriptor;
 import android.util.Log;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -17,6 +19,7 @@ import java.nio.channels.ReadableByteChannel;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+// TODO This class in general kinda sucks.
 public final class MessageService extends Service implements Runnable, SessionListener {
     private static final String TAG = "MessageService";
 
@@ -45,6 +48,7 @@ public final class MessageService extends Service implements Runnable, SessionLi
         mainThread.start();
         storage = new Storage(photosDir);
         session = new Session(storage, this);
+        // TODO proper death notification!
         if (session.isDead()) {
             //TODO notification!
             Log.e(TAG, "Session couldn't start");
@@ -223,23 +227,28 @@ public final class MessageService extends Service implements Runnable, SessionLi
             File[] photos = new File[photoUris.length];
             for (int i = 0; i < photos.length; i++) {
                 try {
-                    InputStream in = App.openInputStream(photoUris[i]);
+                    ParcelFileDescriptor fd = App.contentResolver.openFileDescriptor(photoUris[i], "r");
+                    if (fd == null) {
+                        throw new IOException("null fd for photo " + i);
+                    }
+                    FileChannel src = new FileInputStream(fd.getFileDescriptor()).getChannel();
                     photos[i] = File.createTempFile("photo", ".jpg", App.context.getFilesDir());
-                    ReadableByteChannel src = Channels.newChannel(in);
                     FileChannel dst = new FileOutputStream(photos[i]).getChannel();
-                    ByteBuffer buf = ByteBuffer.allocateDirect(65536);
-                    while (src.read(buf) != -1) {
-                        buf.flip();
-                        while (buf.hasRemaining()) {
-                            dst.write(buf);
+                    long position = 0;
+                    while (true) {
+                        long written = dst.transferFrom(src, position, Integer.MAX_VALUE);
+                        if (written == 0) {
+                            break;
                         }
-                        buf.clear();
+                        position += written;
                     }
                     src.close();
                     dst.close();
+                    fd.close();
                 } catch (IOException e) {
                     // TODO notify/toast
                     // XXX ehhh, this loses info. Do not like.
+                    Log.e(TAG, "failed to copy file", e);
                 }
             }
             session.sendPhotos(photos);

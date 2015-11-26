@@ -66,10 +66,6 @@ public class App {
         }
     }
 
-    public static InputStream openInputStream(Uri uri) throws FileNotFoundException {
-        return contentResolver.openInputStream(uri);
-    }
-
     public static Bitmap decodeSampledBitmap(String path, int reqWidth, int reqHeight) {
         BitmapFactory.Options options = new BitmapFactory.Options();
         options.inJustDecodeBounds = true;
