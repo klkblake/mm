@@ -8,8 +8,8 @@ typedef unsigned char u8;
 struct crypto_state {
     u8 key[crypto_box_BEFORENMBYTES];
     struct {
-        u8 nonce1[8];
-        u8 nonce2[8];
+            jlong nonce1;
+            jlong nonce2;
     } nonce;
 };
 
@@ -36,12 +36,24 @@ Java_com_klkblake_mm_Crypto_create(JNIEnv *env, jclass type, jbyteArray pubkey_,
 
     struct crypto_state *state = malloc(sizeof(struct crypto_state));
     crypto_box_beforenm(state->key, (u8 *) pubkey, (u8 *) seckey);
-    randombytes_buf(state->nonce.nonce1, sizeof(state->nonce.nonce1));
-    memset(state->nonce.nonce2, 0, sizeof(state->nonce.nonce2)); // TODO Set by app later
+    randombytes_buf(&state->nonce.nonce1, sizeof(state->nonce.nonce1));
+    memset(&state->nonce.nonce2, 0, sizeof(state->nonce.nonce2));
 
     (*env)->ReleaseByteArrayElements(env, pubkey_, pubkey, 0);
     (*env)->ReleaseByteArrayElements(env, seckey_, seckey, 0);
     return (jlong) state;
+}
+
+JNIEXPORT jlong JNICALL
+Java_com_klkblake_mm_Crypto_getNonce1(JNIEnv *env, jclass type, jlong ptr) {
+    struct crypto_state *state = (struct crypto_state *) ptr;
+    return state->nonce.nonce1;
+}
+
+JNIEXPORT void JNICALL
+Java_com_klkblake_mm_Crypto_setNonce2(JNIEnv *env, jclass type, jlong ptr, jlong nonce2) {
+    struct crypto_state *state = (struct crypto_state *) ptr;
+    state->nonce.nonce2 = nonce2;
 }
 
 static void

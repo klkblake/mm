@@ -4,17 +4,16 @@ Protocol specification
 The protocol uses two ports, the control port 29192 and the data port 29292.
 The data port is used for uploading/downloading large files (pictures,
 videos, etc).  Appart from the initial exchange, everything is encrypted using
-sodium's `crypto_box`.
+sodium's `crypto_box_easy`.
 
 All messages are prepended by a u16 unencrypted size field.  This size is
 offset by 1 (as in, a value of 5 would mean that the message is 6 bytes long).
-The size excludes the size of the authentication tag (`crypto_box_MACBYTES`).
-Note that the translation from encoded size to actual size is uniform, so you
-must add `crypto_box_MACBYTES` even if the message is not encrypted for the
-control channel, and the size of the normal header for the data channel. For
-messages on the data channel, the size also excludes the size of the header.
-Messages on the control channel are capped to a maximum size of 1024 (so
-encoded as 1023).
+The size excludes the size of the authentication tag (16 bytes).  Note that the
+translation from encoded size to actual size is uniform, so you must add the
+size of the tag even if the message is not encrypted for the control channel,
+and the size of the normal header for the data channel. For messages on the
+data channel, the size also excludes the size of the header.  Messages on the
+control channel are capped to a maximum size of 1024.
 
 Encryption Negotiation
 ----------------------
@@ -64,6 +63,7 @@ it is changed.
         u8 error = 1;
         u16 min_version;
         u16 max_version;
+        u8 padding[12] = {};
     };
 
 If the provided version is not acceptable, `ErrorBadVersion` is sent instead of
@@ -71,9 +71,10 @@ If the provided version is not acceptable, `ErrorBadVersion` is sent instead of
 inclusive. The server disconnects immediatly after sending this error message
 (and indeed after all error messages).
 
-     struct ErrorUnknownUser {
-         u8 error = 2;
-     };
+    struct ErrorUnknownUser {
+        u8 error = 2;
+        u8 padding[16] = {};
+    };
 
 If the server does not know of the user, this is sent, and as mentioned above
 the server disconnects.
@@ -87,9 +88,8 @@ without sending a message.
 
 At this point the client must open a data connection and send the
 `DataHelloClient`. If the session token is invalid, the server closes the
-connection. Otherwise it transmits a minimum length message that consists only
-of zero bytes as an ACK. All further communication on the data channel is
-encrypted.
+connection, before transmitting any further messages on the control channel.
+All further communication on the data channel is encrypted.
 
     struct LoClient {
         u8 peer_public_key[32];

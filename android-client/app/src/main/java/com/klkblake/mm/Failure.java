@@ -4,12 +4,20 @@ package com.klkblake.mm;
  * Created by kyle on 10/11/15.
  */
 abstract class Failure extends Exception {
+    public Failure() {
+        super();
+    }
+
     public Failure(String message) {
         super(message);
     }
 
     public Failure(Throwable cause) {
         super(cause);
+    }
+
+    public Failure(String message, Throwable cause) {
+        super(message, cause);
     }
 
     public abstract void notifyListener(SessionListener listener);
@@ -33,9 +41,13 @@ abstract class Failure extends Exception {
             super(message);
         }
 
+        public ProtocolFailure(String message, Throwable cause) {
+            super(message, cause);
+        }
+
         @Override
         public void notifyListener(SessionListener listener) {
-            listener.protocolViolation(getMessage());
+            listener.protocolViolation(getMessage(), getCause());
         }
     }
 

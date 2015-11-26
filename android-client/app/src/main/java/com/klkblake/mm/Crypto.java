@@ -28,15 +28,29 @@ public final class Crypto {
     private final long ptr;
 
     private static native long create(byte[] pubkey, byte[] seckey);
+    private static native long getNonce1(long ptr);
+    private static native void setNonce2(long ptr, long nonce2);
     private static native void encrypt(long ptr, ByteBuffer buf, int position, int limit, long counter);
     private static native boolean decrypt(long ptr, ByteBuffer buf, int position, int limit, long counter);
     private static native void destroy(long ptr);
 
     public Crypto() {
-        byte[] pubkey = getKey("key.pub", PUBLICKEYBYTES);
+        byte[] pubkey = getPublicKey();
         byte[] seckey = getKey("key.sec", SECRETKEYBYTES);
         // XXX This is wrong! We want the *server's* public key here
         ptr = create(pubkey, seckey);
+    }
+
+    public static byte[] getPublicKey() {
+        return getKey("key.pub", PUBLICKEYBYTES);
+    }
+
+    public long getNonce1() {
+        return getNonce1(ptr);
+    }
+
+    public void setNonce2(long nonce2) {
+        setNonce2(ptr, nonce2);
     }
 
     // Must be a direct buffer

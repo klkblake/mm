@@ -91,6 +91,36 @@ public final class MessageService extends Service implements Runnable, SessionLi
         return binder;
     }
 
+    @Override
+    public void receivedOurColor(int color) {
+        // TODO real implementation
+    }
+
+    @Override
+    public void receivedOurName(String name) {
+        // TODO real implementation
+    }
+
+    @Override
+    public void receivedOurAvatarSha256(byte[] avatarSha256) {
+        // TODO real implementation
+    }
+
+    @Override
+    public void receivedPeerColor(int color) {
+        // TODO real implementation
+    }
+
+    @Override
+    public void receivedPeerName(String name) {
+        // TODO real implementation
+    }
+
+    @Override
+    public void receivedPeerAvatarSha256(byte[] avatarSha256) {
+        // TODO real implementation
+    }
+
     // TODO are these callbacks actually useful as is?
     @Override
     public void receivedMessage(long id, long timestamp, boolean author, String message) {
@@ -119,8 +149,27 @@ public final class MessageService extends Service implements Runnable, SessionLi
     }
 
     @Override
+    public void badVersion(int minVersion, int maxVersion) {
+        // TODO real implementation
+        Log.e(TAG, "Bad version! Range is " + minVersion + " to " + maxVersion);
+    }
+
+    @Override
+    public void unknownUser() {
+        // TODO real implementation
+        Log.wtf(TAG, "Unknown user!");
+    }
+
+    @Override
+    public void unknownPeer() {
+        // TODO real implementation
+        Log.e(TAG, "Unknown peer");
+    }
+
+    @Override
     public void authenticationFailed(boolean isControlChannel) {
         String channel = isControlChannel ? "control" : "data";
+        // TODO better reporting
         Log.e(TAG, "Authentication failed! Probable MITM attack on " + channel + " channel");
     }
 
@@ -131,7 +180,7 @@ public final class MessageService extends Service implements Runnable, SessionLi
     }
 
     @Override
-    public void protocolViolation(String message) {
+    public void protocolViolation(String message, Throwable cause) {
         // TODO report somehow
         Log.e(TAG, message);
     }
