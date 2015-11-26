@@ -66,6 +66,9 @@ public final class MessageService extends Service implements Runnable, SessionLi
     public void run() {
         while (!die) {
             for (MessageListAdapter adapter; (adapter = newAdapters.poll()) != null; ) {
+                if (adapters.contains(adapter)) {
+                    continue;
+                }
                 adapter.updateMessages(messageCount);
                 adapters.add(adapter);
             }

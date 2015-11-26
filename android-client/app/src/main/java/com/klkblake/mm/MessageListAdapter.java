@@ -6,6 +6,7 @@ import android.content.res.TypedArray;
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.net.Uri;
+import android.support.annotation.Nullable;
 import android.util.LruCache;
 import android.view.Gravity;
 import android.view.View;
@@ -30,49 +31,20 @@ import static com.klkblake.mm.Util.min;
 /**
  * Created by kyle on 1/10/15.
  */
-public class MessageListAdapter extends BaseAdapter implements AbsListView.RecyclerListener, Runnable {
+public class MessageListAdapter extends BaseAdapter implements AbsListView.RecyclerListener {
     public static final int MAX_PREVIEW_PHOTOS = 9;
-    private final Thread loaderThread;
+    private ImageLoaderThread loader = null;
 
-    private ListView listView;
+    private final ListView listView;
     private MessageService.Binder service = null;
     private String photosDir;
     private int messageIDStart = 0;
     private int messageCount = 0;
     private int textColorLight, textColorDark;
 
-    private final ArrayDeque<ImageLoadRequest> loadImageRequests = new ArrayDeque<>();
-    // TODO do we want to decode ahead of a scroll?
-    private LruCache<ImageLoadRequest, Bitmap> imageCache;
-    private final Runnable notifyDataSetChanged = new Runnable() {
-        @Override
-        public void run() {
-            notifyDataSetChanged();
-        }
-    };
-    private boolean die = false;
-
-    public MessageListAdapter(ListView listView) {
+    public MessageListAdapter(final ListView listView) {
         this.listView = listView;
-        WindowManager wm = (WindowManager) App.context.getSystemService(Context.WINDOW_SERVICE);
-        Point size = new Point();
-        wm.getDefaultDisplay().getSize(size);
-        int numBoxes;
-        if (size.x < size.y) {
-            // Portrait
-            numBoxes = size.y / size.x + 2;
-        } else {
-            // Landscape or square
-            numBoxes = 3;
-        }
-        int pixels = numBoxes * size.x * size.x;
-        // TODO make excess size configurable
-        imageCache = new LruCache<ImageLoadRequest, Bitmap>(pixels * 4 + 8 * 1024 * 1024) {
-            @Override
-            protected int sizeOf(ImageLoadRequest key, Bitmap value) {
-                return value.getByteCount();
-            }
-        };
+
         TypedArray colors = App.context.getTheme().obtainStyledAttributes(new int[]{
                 android.R.attr.textColorPrimary,
                 android.R.attr.textColorPrimaryInverse
@@ -80,14 +52,26 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
         textColorLight = colors.getColor(0, 0xffffffff);
         textColorDark = colors.getColor(1, 0xff000000);
         colors.recycle();
-        loaderThread = new Thread(this, "Image loader");
-        loaderThread.start();
     }
 
     public void onServiceConnected(MessageService.Binder service) {
         this.service = service;
         service.addAdapter(this);
         photosDir = service.getPhotosDir();
+        if (loader == null) {
+            loader = new ImageLoaderThread(photosDir, new Runnable() {
+                @Override
+                public void run() {
+                    listView.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            notifyDataSetChanged();
+                        }
+                    });
+                }
+            });
+            loader.start();
+        }
     }
 
     public void updateMessages(final int newMessageCount) {
@@ -134,61 +118,9 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
         return TYPE_PHOTOS + MAX_PREVIEW_PHOTOS + 1;
     }
 
-    @Override
-    public void run() {
-        while (!die) {
-            boolean loadedAnImage = false;
-            while (true) {
-                final ImageLoadRequest request;
-                synchronized (loadImageRequests) {
-                    request = loadImageRequests.peek();
-                    if (request == null) {
-                        break;
-                    }
-                }
-                String path;
-                if (request.isSingle) {
-                    path = photosDir + "/" + request.message + ".jpg";
-                } else {
-                    path = photosDir + "/" + request.message + "/" + request.part + ".jpg";
-                }
-                final Bitmap bitmap = App.decodeSampledBitmap(path, request.reqWidth, request.reqHeight);
-                // TODO handle decode fail
-                // TODO If file doesn't exist yet, wait for notification from Session.
-                imageCache.put(request, bitmap);
-                loadImageRequests.remove();
-                loadedAnImage = true;
-            }
-            if (loadedAnImage) {
-                listView.post(notifyDataSetChanged);
-            }
-            synchronized (loadImageRequests) {
-                if (die || !loadImageRequests.isEmpty()) {
-                    continue;
-                }
-                try {
-                    loadImageRequests.wait();
-                } catch (InterruptedException e) {
-                    Util.impossible(e);
-                }
-            }
-        }
-    }
 
     private void loadImageBitmap(int messageID, int part, ImageView view, boolean isSingle, int size) {
-        ImageLoadRequest request = new ImageLoadRequest(messageID, part, isSingle, size, size);
-        Bitmap bitmap = imageCache.get(request);
-        if (bitmap != null) {
-            view.setImageBitmap(bitmap);
-            return;
-        }
-        synchronized (loadImageRequests) {
-            if (!loadImageRequests.contains(request)) {
-                loadImageRequests.add(request);
-                loadImageRequests.notify();
-            }
-        }
-        view.setImageDrawable(null);
+        view.setImageBitmap(loader.request(messageID, part, isSingle, size));
     }
 
     @Override
@@ -350,55 +282,8 @@ public class MessageListAdapter extends BaseAdapter implements AbsListView.Recyc
     }
 
     public void onDestroy() {
-        die = true;
-        synchronized (loadImageRequests) {
-            loadImageRequests.notify();
-        }
-        try {
-            loaderThread.join();
-        } catch (InterruptedException e) {
-            Util.impossible(e);
-        }
-    }
-
-    class ImageLoadRequest {
-        public final int message;
-        public final int part;
-        public final boolean isSingle;
-        public final int reqWidth;
-        public final int reqHeight;
-
-        public ImageLoadRequest(int message, int part, boolean isSingle, int reqWidth, int reqHeight) {
-            this.message = message;
-            this.part = part;
-            this.isSingle = isSingle;
-            this.reqWidth = reqWidth;
-            this.reqHeight = reqHeight;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-
-            ImageLoadRequest that = (ImageLoadRequest) o;
-
-            return (message == that.message &&
-                    part == that.part &&
-                    isSingle == that.isSingle &&
-                    reqWidth == that.reqWidth &&
-                    reqHeight == that.reqHeight);
-
-        }
-
-        @Override
-        public int hashCode() {
-            int result = message;
-            result = 31 * result + part;
-            result = 31 * result + (isSingle ? 1 : 0);
-            result = 31 * result + reqWidth;
-            result = 31 * result + reqHeight;
-            return result;
+        if (loader != null) {
+            loader.stopSafely();
         }
     }
 }
