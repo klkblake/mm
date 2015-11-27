@@ -11,15 +11,15 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
-import java.nio.channels.ReadableByteChannel;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-// TODO This class in general kinda sucks.
+// XXX This class in general kinda sucks. It basically exists to (a) hook into Android's service
+// framework, and (b) multiplex the stuff we have received from the Session. Except that would then
+// lead to multiple activities running on the same session and responding to the callbacks, which is
+// Bad, because we may double-respond. We really need to think about what we are doing w.r.t
+// multiple activities and multiple conversations.
 public final class MessageService extends Service implements Runnable, SessionListener {
     private static final String TAG = "MessageService";
 
@@ -33,9 +33,9 @@ public final class MessageService extends Service implements Runnable, SessionLi
     String photosDir;
 
     final Object monitor = new Object();
-    ConcurrentLinkedQueue<MessageListAdapter> newAdapters = new ConcurrentLinkedQueue<>();
+    ConcurrentLinkedQueue<MainActivity> newActivities = new ConcurrentLinkedQueue<>();
     // Accessed by multiple threads
-    ArrayList<MessageListAdapter> adapters = new ArrayList<>();
+    ArrayList<MainActivity> activities = new ArrayList<>();
     private int messageCount = 0;
     private boolean updateRequired = false;
 
@@ -65,23 +65,24 @@ public final class MessageService extends Service implements Runnable, SessionLi
     @Override
     public void run() {
         while (!die) {
-            for (MessageListAdapter adapter; (adapter = newAdapters.poll()) != null; ) {
-                if (adapters.contains(adapter)) {
+            for (MainActivity activity; (activity = newActivities.poll()) != null; ) {
+                if (activities.contains(activity)) {
                     continue;
                 }
-                adapter.updateMessages(messageCount);
-                adapters.add(adapter);
+                activity.updateMessageCount(messageCount);
+                activities.add(activity);
             }
             if (updateRequired) {
+                // XXX addActivity has to sync on this monitor for updateRequired, which has potential latency issues
                 synchronized (monitor) {
-                    for (MessageListAdapter adapter : adapters) {
-                        adapter.updateMessages(messageCount);
+                    for (MainActivity activity : activities) {
+                        activity.updateMessageCount(messageCount);
                     }
                     updateRequired = false;
                 }
             }
             synchronized (monitor) {
-                if (die || !newAdapters.isEmpty() || updateRequired) {
+                if (die || !newActivities.isEmpty() || updateRequired) {
                     continue;
                 }
                 try {
@@ -205,8 +206,8 @@ public final class MessageService extends Service implements Runnable, SessionLi
     }
 
     public final class Binder extends android.os.Binder {
-        public void addAdapter(MessageListAdapter adapter) {
-            newAdapters.add(adapter);
+        public void addActivity(MainActivity activity) {
+            newActivities.add(activity);
             synchronized (monitor) {
                 monitor.notify();
             }

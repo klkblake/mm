@@ -4,7 +4,9 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.util.LruCache;
+import android.view.View;
 import android.view.WindowManager;
+import android.widget.ListView;
 
 import java.util.ArrayDeque;
 
@@ -13,7 +15,8 @@ import java.util.ArrayDeque;
  */
 public class ImageLoaderThread extends Thread {
     private final String photosDir;
-    private final Runnable onLoadCallback;
+    private final ListView view;
+    private final MainActivity.MessageListAdapter adapter;
 
     private boolean die = false;
     private final ArrayDeque<ImageLoadRequest> loadImageRequests = new ArrayDeque<>();
@@ -21,10 +24,11 @@ public class ImageLoaderThread extends Thread {
     private LruCache<ImageLoadRequest, Bitmap> imageCache;
 
     // TODO use this from PhotoActivity as well.
-    public ImageLoaderThread(String photosDir, Runnable onLoadCallback) {
+    public ImageLoaderThread(String photosDir, ListView view, MainActivity.MessageListAdapter adapter) {
         super("Image Loader");
         this.photosDir = photosDir;
-        this.onLoadCallback = onLoadCallback;
+        this.view = view;
+        this.adapter = adapter;
 
         WindowManager wm = (WindowManager) App.context.getSystemService(Context.WINDOW_SERVICE);
         Point size = new Point();
@@ -73,7 +77,12 @@ public class ImageLoaderThread extends Thread {
                 loadedAnImage = true;
             }
             if (loadedAnImage) {
-                onLoadCallback.run();
+                view.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        adapter.notifyDataSetChanged();
+                    }
+                });
             }
             synchronized (loadImageRequests) {
                 if (die || !loadImageRequests.isEmpty()) {

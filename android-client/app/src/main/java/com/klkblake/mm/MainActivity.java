@@ -2,8 +2,10 @@ package com.klkblake.mm;
 
 import android.content.ClipData;
 import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.res.TypedArray;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -11,16 +13,29 @@ import android.provider.MediaStore;
 import android.support.design.widget.FloatingActionButton;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.AbsListView;
+import android.widget.BaseAdapter;
 import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.ListView;
+import android.widget.TableLayout;
+import android.widget.TableRow;
+import android.widget.TextView;
 
 import java.io.File;
 import java.io.IOException;
 
 import static com.klkblake.mm.App.toast;
+import static com.klkblake.mm.Message.TYPE_PHOTOS;
+import static com.klkblake.mm.Message.TYPE_TEXT;
+import static com.klkblake.mm.Util.max;
+import static com.klkblake.mm.Util.min;
 
 
 public class MainActivity extends AppActivity {
@@ -29,20 +44,24 @@ public class MainActivity extends AppActivity {
 
     private MessageService.Binder service = null;
     private ServiceConnection serviceConnection;
+    private ImageLoaderThread loader = null;
+    private MessageListAdapter messages;
+    private String photosDir;
+    private String tempPhotoPath;
+
+    private ListView messageList;
     private EditText composeText;
     private FloatingActionButton sendButton;
-    private MessageListAdapter messages;
-    private String tempPhotoPath;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        ListView messageList = (ListView) findViewById(R.id.messageList);
+        messageList = (ListView) findViewById(R.id.messageList);
         composeText = (EditText) findViewById(R.id.composeText);
         sendButton = (FloatingActionButton) findViewById(R.id.sendButton);
 
-        messages = new MessageListAdapter(messageList);
+        messages = new MessageListAdapter();
         messageList.setAdapter(messages);
         composeText.addTextChangedListener(new TextWatcher() {
             @Override
@@ -63,15 +82,21 @@ public class MainActivity extends AppActivity {
         startService(intent);
         serviceConnection = new ServiceConnection() {
             @Override
-            public void onServiceConnected(ComponentName name, IBinder service) {
-                MainActivity.this.service = (MessageService.Binder) service;
-                messages.onServiceConnected(MainActivity.this.service);
+            public void onServiceConnected(ComponentName name, IBinder service_) {
+                // Service disconnection always trigger activity disposal, which means that this
+                // callback will be called exactly once for each instance of this activity
+                service = (MessageService.Binder) service_;
+                photosDir = service.getPhotosDir();
+                service.addActivity(MainActivity.this);
+                loader = new ImageLoaderThread(photosDir, messageList, messages);
+                loader.start();
             }
 
             @Override
             public void onServiceDisconnected(ComponentName name) {
                 // We are completely useless if we can't access the service -- we can't even scroll the list
                 // view! So we bail.
+                // TODO better handling of this condition -- this may not even kill the activity as-is
                 throw new RuntimeException("MessageService was killed");
             }
         };
@@ -158,7 +183,7 @@ public class MainActivity extends AppActivity {
             ClipData selected = data.getClipData();
             Uri[] photoUris;
             if (selected == null) {
-                photoUris = new Uri[] { data.getData() };
+                photoUris = new Uri[]{data.getData()};
             } else {
                 int count = selected.getItemCount();
                 photoUris = new Uri[count];
@@ -174,10 +199,235 @@ public class MainActivity extends AppActivity {
         toast("The service is not yet available.");
     }
 
+    public void updateMessageCount(final int newMessageCount) {
+        messageList.post(new Runnable() {
+            @Override
+            public void run() {
+                messages.messageCount = newMessageCount;
+                messages.notifyDataSetChanged();
+            }
+        });
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
         unbindService(serviceConnection);
-        messages.onDestroy();
+        if (loader != null) {
+            loader.stopSafely();
+        }
+    }
+
+    public class MessageListAdapter extends BaseAdapter implements AbsListView.RecyclerListener {
+        public static final int MAX_PREVIEW_PHOTOS = 9;
+
+        // TODO consider how we want to handle this -- messageIDStart is never written ATM
+        private int messageIDStart = 0;
+        private int messageCount = 0;
+        private int textColorLight, textColorDark;
+
+        public MessageListAdapter() {
+            TypedArray colors = App.context.getTheme().obtainStyledAttributes(new int[]{
+                    android.R.attr.textColorPrimary,
+                    android.R.attr.textColorPrimaryInverse
+            });
+            textColorLight = colors.getColor(0, 0xffffffff);
+            textColorDark = colors.getColor(1, 0xff000000);
+            colors.recycle();
+        }
+
+        @Override
+        public int getCount() {
+            return messageCount;
+        }
+
+        @Override
+        public Object getItem(int position) {
+            return null;
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return 0;
+        }
+
+        @Override
+        public int getItemViewType(int position) {
+            Message message = service.getMessage(messageIDStart + position);
+            int type = message.type;
+            if (type == TYPE_PHOTOS) {
+                int photoCount = message.photoCount;
+                if (photoCount > MAX_PREVIEW_PHOTOS) {
+                    photoCount = MAX_PREVIEW_PHOTOS + 1;
+                }
+                type += photoCount - 1;
+            }
+            return type;
+        }
+
+        @Override
+        public int getViewTypeCount() {
+            return TYPE_PHOTOS + MAX_PREVIEW_PHOTOS + 1;
+        }
+
+        @Override
+        public View getView(int position, View convertView, ViewGroup parent) {
+            int messageID = messageIDStart + position;
+            Message message = service.getMessage(messageIDStart + position);
+            Context context = parent.getContext();
+            switch (message.type) {
+                case TYPE_TEXT: {
+                    TextView view = (TextView) convertView;
+                    if (view == null) {
+                        view = new TextView(context);
+                    }
+                    int color;
+                    // TODO actually look up author colors
+                    if (message.author == Message.AUTHOR_US) {
+                        color = 0xffffaaaa;
+                    } else {
+                        color = 0xffaaffaa;
+                    }
+                    view.setBackgroundColor(color);
+                    if (Util.perceivedBrightness(color) < 0.5f) {
+                        view.setTextColor(textColorLight);
+                    } else {
+                        view.setTextColor(textColorDark);
+                    }
+                    view.setText(message.text);
+                    return view;
+                }
+                case TYPE_PHOTOS: {
+                    // TODO share from contextual menu on long press
+                    final int count = message.photoCount;
+                    int previewCount = min(count, MAX_PREVIEW_PHOTOS);
+                    int width = messageList.getWidth();
+                    if (count == 1) {
+                        ImageView view = (ImageView) convertView;
+                        if (view == null) {
+                            view = new SquareImageView(context);
+                            view.setMinimumWidth(width);
+                        }
+                        view.setImageBitmap(loader.request(messageID, 0, true, width));
+                        final Uri uri = App.getUriForPath(photosDir + "/" + messageID + ".jpg");
+                        view.setOnClickListener(new View.OnClickListener() {
+                            @Override
+                            public void onClick(View v) {
+                                Intent intent = new Intent(Intent.ACTION_VIEW);
+                                intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                                intent.setDataAndType(uri, "image/jpeg");
+                                App.tryStartActivity(intent);
+                            }
+                        });
+                        return view;
+                    }
+                    int overflow = max(count - MAX_PREVIEW_PHOTOS, 0);
+                    TableLayout view = (TableLayout) convertView;
+                    if (view == null) {
+                        int rows, columns;
+                        if (count <= 2) {
+                            rows = 1;
+                        } else if (count <= 6) {
+                            rows = 2;
+                        } else {
+                            rows = 3;
+                        }
+                        if (count <= 4) {
+                            columns = 2;
+                        } else {
+                            columns = 3;
+                        }
+                        int photoIndex = 0;
+                        // FIXME latency
+                        // TODO figure out the optimal order of operations to save time
+                        view = new TableLayout(context);
+                        view.setStretchAllColumns(true);
+                        for (int rowIndex = 0; rowIndex < rows; rowIndex++) {
+                            TableRow row = new TableRow(context);
+                            for (int columnIndex = 0; columnIndex < columns; columnIndex++) {
+                                View entry;
+                                ImageView image = new SquareImageView(context);
+                                image.setMinimumWidth(width / columns);
+                                if (photoIndex++ == MAX_PREVIEW_PHOTOS - 1 && overflow > 0) {
+                                    FrameLayout frame = new FrameLayout(context);
+                                    frame.addView(image);
+                                    TextView text = new TextView(context);
+                                    text.setBackgroundColor(0xc0202020);
+                                    text.setTextColor(0xffffffff);
+                                    text.setGravity(Gravity.CENTER);
+                                    frame.addView(text);
+                                    entry = frame;
+                                } else {
+                                    entry = image;
+                                }
+                                entry.setLayoutParams(new TableRow.LayoutParams(0, TableRow.LayoutParams.WRAP_CONTENT));
+                                row.addView(entry);
+                                if (photoIndex == previewCount) {
+                                    break;
+                                }
+                            }
+                            view.addView(row);
+                        }
+                    }
+                    int columns = ((TableRow) view.getChildAt(0)).getChildCount();
+                    int entryWidth = width / columns;
+                    int photoIndex = 0;
+                    for (int rowIndex = 0; rowIndex < view.getChildCount(); rowIndex++) {
+                        TableRow row = (TableRow) view.getChildAt(rowIndex);
+                        for (int columnIndex = 0; columnIndex < row.getChildCount(); columnIndex++) {
+                            ImageView entry;
+                            if (photoIndex == MAX_PREVIEW_PHOTOS - 1 && overflow > 0) {
+                                String label = App.resources.getQuantityString(R.plurals.more_pictures,
+                                        overflow, overflow);
+                                FrameLayout frame = (FrameLayout) row.getChildAt(columnIndex);
+                                ((TextView) frame.getChildAt(1)).setText(label);
+                                entry = (ImageView) frame.getChildAt(0);
+                            } else {
+                                entry = (ImageView) row.getChildAt(columnIndex);
+                            }
+                            int part = photoIndex++;
+                            entry.setImageBitmap(loader.request(messageID, part, false, entryWidth));
+                        }
+                    }
+                    final String messageDir = photosDir + "/" + messageID;
+                    view.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            Intent intent = new Intent(App.context, PhotosActivity.class);
+                            intent.putExtra(PhotosActivity.EXTRA_PHOTO_DIR, messageDir);
+                            intent.putExtra(PhotosActivity.EXTRA_PHOTO_COUNT, count);
+                            App.startActivity(intent);
+                        }
+                    });
+                    return view;
+                }
+            }
+            throw new AssertionError("Invalid/unimplemented message type: " + message.type);
+        }
+
+        @Override
+        public void onMovedToScrapHeap(View view) {
+            if (view instanceof ImageView) {
+                ImageView imageView = (ImageView) view;
+                imageView.setImageBitmap(null);
+            } else if (view instanceof TableLayout) {
+                TableLayout table = (TableLayout) view;
+                for (int rowIndex = 0; rowIndex < table.getChildCount(); rowIndex++) {
+                    TableRow row = (TableRow) table.getChildAt(rowIndex);
+                    for (int columnIndex = 0; columnIndex < row.getChildCount(); columnIndex++) {
+                        View entry = row.getChildAt(columnIndex);
+                        ImageView imageView;
+                        if (entry instanceof ImageView) {
+                            imageView = (ImageView) entry;
+                        } else if (entry instanceof FrameLayout) {
+                            imageView = (ImageView) ((FrameLayout) entry).getChildAt(0);
+                        } else {
+                            throw new AssertionError("Entry not an instance of an appropriate class?");
+                        }
+                        imageView.setImageBitmap(null);
+                    }
+                }
+            }
+        }
     }
 }
