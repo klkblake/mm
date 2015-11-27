@@ -24,7 +24,7 @@ public final class MessageService extends Service implements Runnable, SessionLi
     private static final String TAG = "MessageService";
 
     private Thread mainThread;
-    private boolean die;
+    private boolean die = false;
     private Storage storage;
     private Session session;
     private Binder binder;
@@ -34,16 +34,15 @@ public final class MessageService extends Service implements Runnable, SessionLi
 
     final Object monitor = new Object();
     ConcurrentLinkedQueue<MainActivity> newActivities = new ConcurrentLinkedQueue<>();
-    // Accessed by multiple threads
     ArrayList<MainActivity> activities = new ArrayList<>();
     private int messageCount = 0;
-    private boolean updateRequired = false;
+    // Increment to trigger new message update -- may not always indicate a change in messageCount
+    private int messageVersion = 0;
 
     @Override
     public void onCreate() {
         // TODO clean up temp dirs?
         photosDir = getCacheDir() + "/photos";
-        die = false;
         mainThread = new Thread(this, "Main service thread");
         mainThread.start();
         storage = new Storage(photosDir);
@@ -64,25 +63,23 @@ public final class MessageService extends Service implements Runnable, SessionLi
 
     @Override
     public void run() {
+        int currentVersion = 0;
         while (!die) {
             for (MainActivity activity; (activity = newActivities.poll()) != null; ) {
                 if (activities.contains(activity)) {
                     continue;
                 }
-                activity.updateMessageCount(messageCount);
+                activity.updateMessages(messageCount);
                 activities.add(activity);
             }
-            if (updateRequired) {
-                // XXX addActivity has to sync on this monitor for updateRequired, which has potential latency issues
-                synchronized (monitor) {
-                    for (MainActivity activity : activities) {
-                        activity.updateMessageCount(messageCount);
-                    }
-                    updateRequired = false;
+            while (currentVersion != messageVersion) {
+                currentVersion = messageVersion;
+                for (MainActivity activity : activities) {
+                    activity.updateMessages(messageCount);
                 }
             }
             synchronized (monitor) {
-                if (die || !newActivities.isEmpty() || updateRequired) {
+                if (die || !newActivities.isEmpty() || currentVersion != messageVersion) {
                     continue;
                 }
                 try {
@@ -133,8 +130,8 @@ public final class MessageService extends Service implements Runnable, SessionLi
     @Override
     public void receivedMessage(long id, long timestamp, boolean author, String message) {
         messageCount = storage.getMessageCount();
+        messageVersion++;
         synchronized (monitor) {
-            updateRequired = true;
             monitor.notify();
         }
     }
@@ -142,16 +139,16 @@ public final class MessageService extends Service implements Runnable, SessionLi
     @Override
     public void receivedMessage(long id, long timestamp, boolean author, int numPhotos) {
         messageCount = storage.getMessageCount();
+        messageVersion++;
         synchronized (monitor) {
-            updateRequired = true;
             monitor.notify();
         }
     }
 
     @Override
     public void receivedPart(long messageID, int partID) {
+        messageVersion++;
         synchronized (monitor) {
-            updateRequired = true;
             monitor.notify();
         }
     }

@@ -199,7 +199,7 @@ public class MainActivity extends AppActivity {
         toast("The service is not yet available.");
     }
 
-    public void updateMessageCount(final int newMessageCount) {
+    public void updateMessages(final int newMessageCount) {
         messageList.post(new Runnable() {
             @Override
             public void run() {
