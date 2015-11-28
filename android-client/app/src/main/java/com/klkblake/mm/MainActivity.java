@@ -1,11 +1,11 @@
 package com.klkblake.mm;
 
 import android.content.Intent;
+import android.graphics.drawable.BitmapDrawable;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
-import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
 
@@ -49,23 +49,22 @@ public class MainActivity extends AppActivity {
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
             Contact contact = contacts[position];
-            View view;
+            TextView view;
             if (convertView == null) {
-                view = getLayoutInflater().inflate(R.layout.item_contact, parent, false);
+                view = (TextView) getLayoutInflater().inflate(R.layout.item_contact, parent, false);
             } else {
-                view = convertView;
+                view = (TextView) convertView;
             }
-            ImageView avatarView = (ImageView) view.findViewById(R.id.avatarView);
-            TextView contactNameView = (TextView) view.findViewById(R.id.contactNameView);
             if (contact.hasAvatar()) {
-                avatarView.setImageBitmap(contact.getAvatar());
+                BitmapDrawable avatar = new BitmapDrawable(getResources(), contact.getAvatar());
+                view.setCompoundDrawablesRelativeWithIntrinsicBounds(avatar, null, null, null);
             } else {
-                avatarView.setImageResource(R.drawable.ic_person_48dp);
+                view.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_person_48dp, 0, 0, 0);
             }
-            contactNameView.setText(contact.getName());
+            view.setText(contact.getName());
             int color = contact.getColor();
             view.setBackgroundColor(color);
-            setTextViewForBackground(contactNameView, color);
+            setTextViewForBackground(view, color);
             return view;
         }
     }
