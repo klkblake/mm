@@ -4,7 +4,6 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.util.LruCache;
-import android.view.View;
 import android.view.WindowManager;
 import android.widget.ListView;
 
@@ -16,7 +15,7 @@ import java.util.ArrayDeque;
 public class ImageLoaderThread extends Thread {
     private final String photosDir;
     private final ListView view;
-    private final MainActivity.MessageListAdapter adapter;
+    private final ChatActivity.MessageListAdapter adapter;
 
     private boolean die = false;
     private final ArrayDeque<ImageLoadRequest> loadImageRequests = new ArrayDeque<>();
@@ -24,7 +23,7 @@ public class ImageLoaderThread extends Thread {
     private LruCache<ImageLoadRequest, Bitmap> imageCache;
 
     // TODO use this from PhotoActivity as well.
-    public ImageLoaderThread(String photosDir, ListView view, MainActivity.MessageListAdapter adapter) {
+    public ImageLoaderThread(String photosDir, ListView view, ChatActivity.MessageListAdapter adapter) {
         super("Image Loader");
         this.photosDir = photosDir;
         this.view = view;

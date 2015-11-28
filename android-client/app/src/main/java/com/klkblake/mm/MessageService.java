@@ -33,8 +33,8 @@ public final class MessageService extends Service implements Runnable, SessionLi
     String photosDir;
 
     final Object monitor = new Object();
-    ConcurrentLinkedQueue<MainActivity> newActivities = new ConcurrentLinkedQueue<>();
-    ArrayList<MainActivity> activities = new ArrayList<>();
+    ConcurrentLinkedQueue<ChatActivity> newActivities = new ConcurrentLinkedQueue<>();
+    ArrayList<ChatActivity> activities = new ArrayList<>();
     private int messageCount = 0;
     // Increment to trigger new message update -- may not always indicate a change in messageCount
     private int messageVersion = 0;
@@ -65,7 +65,7 @@ public final class MessageService extends Service implements Runnable, SessionLi
     public void run() {
         int currentVersion = 0;
         while (!die) {
-            for (MainActivity activity; (activity = newActivities.poll()) != null; ) {
+            for (ChatActivity activity; (activity = newActivities.poll()) != null; ) {
                 if (activities.contains(activity)) {
                     continue;
                 }
@@ -74,7 +74,9 @@ public final class MessageService extends Service implements Runnable, SessionLi
             }
             while (currentVersion != messageVersion) {
                 currentVersion = messageVersion;
-                for (MainActivity activity : activities) {
+                // XXX How should we be handling activities in the background? They should definitely be detached if they are about to be destroyed.
+                // TODO Ok, new plan: A main activity to choose who to talk to with launchMode=singleTask, set up to only launch the message window task once. This vastly simplifies everything, and is easier to use for the user as well.
+                for (ChatActivity activity : activities) {
                     activity.updateMessages(messageCount);
                 }
             }
@@ -203,7 +205,7 @@ public final class MessageService extends Service implements Runnable, SessionLi
     }
 
     public final class Binder extends android.os.Binder {
-        public void addActivity(MainActivity activity) {
+        public void addActivity(ChatActivity activity) {
             newActivities.add(activity);
             synchronized (monitor) {
                 monitor.notify();

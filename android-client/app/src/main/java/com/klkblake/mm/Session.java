@@ -170,6 +170,7 @@ public class Session implements Runnable {
 
     @Override
     public void run() {
+        // TODO switch to using CurveCP as our transport
         Failure failure = null;
         byte[] pubkey = Crypto.getPublicKey();
         byte[] peerpubkey = new byte[32]; // TODO actually specify a peer.
