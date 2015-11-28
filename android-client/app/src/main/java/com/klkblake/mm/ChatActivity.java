@@ -5,7 +5,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
-import android.content.res.TypedArray;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -19,7 +18,6 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AbsListView;
-import android.widget.BaseAdapter;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -79,16 +77,13 @@ public class ChatActivity extends AppActivity {
             }
         });
 
-        Intent intent = new Intent(App.context, MessageService.class);
-        startService(intent);
+        startService(new Intent(App.context, MessageService.class));
         serviceConnection = new ServiceConnection() {
             @Override
             public void onServiceConnected(ComponentName name, IBinder service_) {
-                // Service disconnection always trigger activity disposal, which means that this
-                // callback will be called exactly once for each instance of this activity
                 service = (MessageService.Binder) service_;
                 photosDir = service.getPhotosDir();
-                service.addActivity(ChatActivity.this);
+                service.setActivity(ChatActivity.this);
                 loader = new ImageLoaderThread(photosDir, messageList, messages);
                 loader.start();
             }
@@ -98,10 +93,19 @@ public class ChatActivity extends AppActivity {
                 // We are completely useless if we can't access the service -- we can't even scroll the list
                 // view! So we bail.
                 // TODO better handling of this condition -- this may not even kill the activity as-is
+                service = null;
+                if (loader != null) {
+                    loader.stopSafely();
+                }
                 throw new RuntimeException("MessageService was killed");
             }
         };
-        bindService(intent, serviceConnection, BIND_IMPORTANT | BIND_ABOVE_CLIENT);
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        bindService(new Intent(App.context, MessageService.class), serviceConnection, BIND_IMPORTANT | BIND_ABOVE_CLIENT);
     }
 
     @Override
@@ -211,8 +215,10 @@ public class ChatActivity extends AppActivity {
     }
 
     @Override
-    protected void onDestroy() {
-        super.onDestroy();
+    protected void onStop() {
+        super.onStop();
+        service.setActivity(null);
+        service = null;
         unbindService(serviceConnection);
         if (loader != null) {
             loader.stopSafely();

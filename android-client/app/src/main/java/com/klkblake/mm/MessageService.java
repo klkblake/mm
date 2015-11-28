@@ -14,37 +14,25 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
-// XXX This class in general kinda sucks. It basically exists to (a) hook into Android's service
-// framework, and (b) multiplex the stuff we have received from the Session. Except that would then
-// lead to multiple activities running on the same session and responding to the callbacks, which is
-// Bad, because we may double-respond. We really need to think about what we are doing w.r.t
-// multiple activities and multiple conversations.
-public final class MessageService extends Service implements Runnable, SessionListener {
+
+public final class MessageService extends Service implements SessionListener {
     private static final String TAG = "MessageService";
 
-    private Thread mainThread;
-    private boolean die = false;
     private Storage storage;
     private Session session;
     private Binder binder;
+    private volatile ChatActivity activity;
 
     // These are package-access so we can cheaply access them from the inner class.
     String photosDir;
-
-    final Object monitor = new Object();
-    ConcurrentLinkedQueue<ChatActivity> newActivities = new ConcurrentLinkedQueue<>();
-    ArrayList<ChatActivity> activities = new ArrayList<>();
-    private int messageCount = 0;
-    // Increment to trigger new message update -- may not always indicate a change in messageCount
-    private int messageVersion = 0;
 
     @Override
     public void onCreate() {
         // TODO clean up temp dirs?
         photosDir = getCacheDir() + "/photos";
-        mainThread = new Thread(this, "Main service thread");
-        mainThread.start();
         storage = new Storage(photosDir);
         session = new Session(storage, this);
         // TODO proper death notification!
@@ -59,38 +47,6 @@ public final class MessageService extends Service implements Runnable, SessionLi
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         return START_STICKY;
-    }
-
-    @Override
-    public void run() {
-        int currentVersion = 0;
-        while (!die) {
-            for (ChatActivity activity; (activity = newActivities.poll()) != null; ) {
-                if (activities.contains(activity)) {
-                    continue;
-                }
-                activity.updateMessages(messageCount);
-                activities.add(activity);
-            }
-            while (currentVersion != messageVersion) {
-                currentVersion = messageVersion;
-                // XXX How should we be handling activities in the background? They should definitely be detached if they are about to be destroyed.
-                // TODO Ok, new plan: A main activity to choose who to talk to with launchMode=singleTask, set up to only launch the message window task once. This vastly simplifies everything, and is easier to use for the user as well.
-                for (ChatActivity activity : activities) {
-                    activity.updateMessages(messageCount);
-                }
-            }
-            synchronized (monitor) {
-                if (die || !newActivities.isEmpty() || currentVersion != messageVersion) {
-                    continue;
-                }
-                try {
-                    monitor.wait();
-                } catch (InterruptedException e) {
-                    Util.impossible(e);
-                }
-            }
-        }
     }
 
     @Override
@@ -131,27 +87,25 @@ public final class MessageService extends Service implements Runnable, SessionLi
     // TODO are these callbacks actually useful as is?
     @Override
     public void receivedMessage(long id, long timestamp, boolean author, String message) {
-        messageCount = storage.getMessageCount();
-        messageVersion++;
-        synchronized (monitor) {
-            monitor.notify();
+        ChatActivity activity_ = activity;
+        if (activity_ != null) {
+            activity_.updateMessages(storage.getMessageCount());
         }
     }
 
     @Override
     public void receivedMessage(long id, long timestamp, boolean author, int numPhotos) {
-        messageCount = storage.getMessageCount();
-        messageVersion++;
-        synchronized (monitor) {
-            monitor.notify();
+        ChatActivity activity_ = activity;
+        if (activity_ != null) {
+            activity_.updateMessages(storage.getMessageCount());
         }
     }
 
     @Override
     public void receivedPart(long messageID, int partID) {
-        messageVersion++;
-        synchronized (monitor) {
-            monitor.notify();
+        ChatActivity activity_ = activity;
+        if (activity_ != null) {
+            activity_.updateMessages(storage.getMessageCount());
         }
     }
 
@@ -205,10 +159,10 @@ public final class MessageService extends Service implements Runnable, SessionLi
     }
 
     public final class Binder extends android.os.Binder {
-        public void addActivity(ChatActivity activity) {
-            newActivities.add(activity);
-            synchronized (monitor) {
-                monitor.notify();
+        public void setActivity(ChatActivity activity) {
+            MessageService.this.activity = activity;
+            if (activity != null) {
+                activity.updateMessages(storage.getMessageCount());
             }
         }
 
@@ -265,14 +219,5 @@ public final class MessageService extends Service implements Runnable, SessionLi
     @Override
     public void onDestroy() {
         session.close();
-        die = true;
-        synchronized (monitor) {
-            monitor.notify();
-        }
-        try {
-            mainThread.join();
-        } catch (InterruptedException e) {
-            Util.impossible(e);
-        }
     }
 }
