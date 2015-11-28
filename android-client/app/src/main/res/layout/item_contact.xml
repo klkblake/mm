@@ -4,5 +4,6 @@
     android:layout_height="match_parent"
     android:textAppearance="?android:attr/textAppearanceLarge"
     android:id="@+id/contactView"
-    android:drawableStart="@drawable/ic_person_48dp">
+    android:drawableStart="@drawable/ic_person_48dp"
+    android:background="@drawable/colored_selectable_item_background">
 </TextView>

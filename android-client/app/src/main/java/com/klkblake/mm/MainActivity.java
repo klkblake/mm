@@ -12,6 +12,7 @@ import android.widget.TextView;
 public class MainActivity extends AppActivity {
     private Contact[] contacts = new Contact[] {
             new Contact("Test User", 0xffffcccc, null, new byte[32]),
+            new Contact("Test User2", 0xffcc0033, null, new byte[32]),
     };
 
     @Override
@@ -52,6 +53,7 @@ public class MainActivity extends AppActivity {
             TextView view;
             if (convertView == null) {
                 view = (TextView) getLayoutInflater().inflate(R.layout.item_contact, parent, false);
+                initSelectableView(view, view.getBackground());
             } else {
                 view = (TextView) convertView;
             }
@@ -63,8 +65,7 @@ public class MainActivity extends AppActivity {
             }
             view.setText(contact.getName());
             int color = contact.getColor();
-            view.setBackgroundColor(color);
-            setTextViewForBackground(view, color);
+            setSelectableBackgroundColor(view, color);
             return view;
         }
     }

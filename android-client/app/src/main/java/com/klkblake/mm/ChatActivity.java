@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -15,6 +16,7 @@ import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AbsListView;
@@ -276,6 +278,7 @@ public class ChatActivity extends AppActivity {
                     TextView view = (TextView) convertView;
                     if (view == null) {
                         view = new TextView(context);
+                        initSelectableView(view, getDrawable(R.drawable.colored_selectable_item_background));
                     }
                     int color;
                     // TODO actually look up author colors
@@ -284,8 +287,7 @@ public class ChatActivity extends AppActivity {
                     } else {
                         color = 0xffaaffaa;
                     }
-                    view.setBackgroundColor(color);
-                    setTextViewForBackground(view, color);
+                    setSelectableBackgroundColor(view, color);
                     view.setText(message.text);
                     return view;
                 }

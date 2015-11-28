@@ -1,6 +1,11 @@
 package com.klkblake.mm;
 
 import android.content.res.TypedArray;
+import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.LayerDrawable;
+import android.view.MotionEvent;
+import android.view.View;
 import android.widget.BaseAdapter;
 import android.widget.TextView;
 
@@ -20,7 +25,22 @@ public abstract class ColoredListAdapter extends BaseAdapter {
         colors.recycle();
     }
 
-    protected void setTextViewForBackground(TextView view, int color) {
+    protected void initSelectableView(TextView view, Drawable background) {
+        view.setBackground(background.mutate());
+        // This is a workaround for a bug in Android 5.0
+        view.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                v.drawableHotspotChanged(event.getX(), event.getY());
+                return false;
+            }
+        });
+    }
+
+    protected void setSelectableBackgroundColor(TextView view, int color) {
+        LayerDrawable background = (LayerDrawable) view.getBackground();
+        ColorDrawable solidColor = (ColorDrawable) background.getDrawable(0);
+        solidColor.setColor(color);
         if (Util.perceivedBrightness(color) < 0.5f) {
             view.setTextColor(textColorLight);
         } else {
