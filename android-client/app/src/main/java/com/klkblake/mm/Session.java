@@ -86,18 +86,14 @@ public class Session implements Runnable {
     private long dataServerCounter;
     private Crypto crypto;
 
-    public Session(Storage storage, SessionListener listener) {
+    public Session(Storage storage, SessionListener listener) throws IOException {
         this.storage = storage;
         this.listener = listener;
         controlSendBuf.order(ByteOrder.LITTLE_ENDIAN);
         controlRecvBuf.order(ByteOrder.LITTLE_ENDIAN);
         dataSendBuf.order(ByteOrder.LITTLE_ENDIAN);
         dataRecvBuf.order(ByteOrder.LITTLE_ENDIAN);
-
-        try {
-            restart();
-        } catch (IOException ignored) {
-        }
+        restart();
     }
 
     public boolean isDead() {
@@ -108,18 +104,9 @@ public class Session implements Runnable {
         if (!dead) {
             throw new IllegalStateException("Restarting already running session!");
         }
-
         if (selector == null) {
             selector = Selector.open();
         }
-        // TODO consider moving to run()
-        controlSendBuf.rewind();
-        controlSendBuf.limit(0);
-        dataSendBuf.rewind();
-        dataSendBuf.limit(0);
-        controlRecvBuf.clear();
-        dataRecvBuf.clear();
-
         dead = false;
         new Thread(this, "Session Thread").start();
     }
@@ -172,6 +159,12 @@ public class Session implements Runnable {
     public void run() {
         // TODO switch to using CurveCP as our transport
         Failure failure = null;
+        controlSendBuf.rewind();
+        controlSendBuf.limit(0);
+        dataSendBuf.rewind();
+        dataSendBuf.limit(0);
+        controlRecvBuf.clear();
+        dataRecvBuf.clear();
         byte[] pubkey = Crypto.getPublicKey();
         byte[] peerpubkey = new byte[32]; // TODO actually specify a peer.
         crypto = new Crypto();
@@ -184,8 +177,10 @@ public class Session implements Runnable {
         try {
             try {
                 // TODO notify app on connection established
-                controlChannel = SocketChannel.open(new InetSocketAddress("klkblake.com", 29192));
-                dataChannel = SocketChannel.open(new InetSocketAddress("klkblake.com", 29292));
+                controlChannel = SocketChannel.open();
+                dataChannel = SocketChannel.open();
+                controlChannel.socket().connect(new InetSocketAddress("klkblake.com", 29192), 10000);
+                dataChannel.socket().connect(new InetSocketAddress("klkblake.com", 29292), 10000);
                 controlChannel.configureBlocking(false);
                 dataChannel.configureBlocking(false);
                 controlKey = controlChannel.register(selector, OP_READ);

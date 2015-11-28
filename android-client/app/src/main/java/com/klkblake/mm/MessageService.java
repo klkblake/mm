@@ -1,16 +1,21 @@
 package com.klkblake.mm;
 
+import android.app.Notification;
+import android.app.NotificationManager;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.IBinder;
 import android.os.ParcelFileDescriptor;
+import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -34,8 +39,12 @@ public final class MessageService extends Service implements SessionListener {
         // TODO clean up temp dirs?
         photosDir = getCacheDir() + "/photos";
         storage = new Storage(photosDir);
-        session = new Session(storage, this);
-        // TODO proper death notification!
+        try {
+            session = new Session(storage, this);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        // TODO proper death notification! Unexpected exception tracking!
         if (session.isDead()) {
             //TODO notification!
             Log.e(TAG, "Session couldn't start");
@@ -137,6 +146,14 @@ public final class MessageService extends Service implements SessionListener {
     @Override
     public void networkFailed(Throwable cause) {
         // TODO report somehow
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this);
+        builder.setSmallIcon(R.mipmap.ic_launcher);
+        builder.setContentTitle("Could not connect to server");
+        builder.setContentText("A network error occurred");
+        builder.setVisibility(Notification.VISIBILITY_SECRET);
+        builder.setStyle(new NotificationCompat.BigTextStyle().bigText(cause.getMessage()));
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        manager.notify(0, builder.build());
         Log.i(TAG, "Network issue", cause);
     }
 
