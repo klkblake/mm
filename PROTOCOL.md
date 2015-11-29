@@ -1,6 +1,9 @@
 Protocol specification
 ======================
 
+In the future this protocol will be replaced with something based on CurveCP.
+However, for the present the following suffices.
+
 The protocol uses two ports, the control port 29192 and the data port 29292.
 The data port is used for uploading/downloading large files (pictures,
 videos, etc).  Appart from the initial exchange, everything is encrypted using

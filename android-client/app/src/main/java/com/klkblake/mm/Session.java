@@ -157,7 +157,6 @@ public class Session implements Runnable {
 
     @Override
     public void run() {
-        // TODO switch to using CurveCP as our transport
         Failure failure = null;
         controlSendBuf.rewind();
         controlSendBuf.limit(0);
