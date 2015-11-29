@@ -9,11 +9,19 @@ import android.widget.AdapterView;
 import android.widget.ListView;
 import android.widget.TextView;
 
+import java.util.ArrayList;
+
 public class MainActivity extends AppActivity {
-    private Contact[] contacts = new Contact[] {
-            new Contact("Test User", 0xffffcccc, null, new byte[32]),
-            new Contact("Test User2", 0xffcc0033, null, new byte[32]),
+    private AndroidUser[] contacts = new AndroidUser[] {
+            new AndroidUser("Test User", 0xffffcccc, new byte[32], 0, null),
+            new AndroidUser(),
+            new AndroidUser("Test User2", 0xffcc0033, new byte[32], 0, null),
     };
+
+    {
+        contacts[1].addSubUser("Test User 1.1", 0xffffccff, new byte[32], 0, null);
+        contacts[1].addSubUser("Test User 1.2", 0xffffffcc, new byte[32], 0, null);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,7 +42,11 @@ public class MainActivity extends AppActivity {
     private class ContactListAdapter extends ColoredListAdapter {
         @Override
         public int getCount() {
-            return contacts.length;
+            int count = 0;
+            for (AndroidUser user : contacts) {
+                count += user.subusers.size();
+            }
+            return count;
         }
 
         @Override
@@ -49,7 +61,15 @@ public class MainActivity extends AppActivity {
 
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
-            Contact contact = contacts[position];
+            AndroidUser.SubUser contact;
+            for (int userIndex = 0; ; userIndex++) {
+                AndroidUser user = contacts[userIndex];
+                if (position < user.subusers.size()) {
+                    contact = user.subusers.get(position);
+                    break;
+                }
+                position -= user.subusers.size();
+            }
             TextView view;
             if (convertView == null) {
                 view = (TextView) getLayoutInflater().inflate(R.layout.item_contact, parent, false);
