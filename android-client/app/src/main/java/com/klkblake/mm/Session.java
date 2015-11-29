@@ -39,25 +39,23 @@ public class Session implements Runnable {
     public static final int DATA_HEADER_SIZE = 11;
     public static final int CONTROL_LENGTH_MAX = 1024;
     public static final int MAX_CHUNK_SIZE = 65536;
-    public static final int MAX_PARTS = 251;
-    public static final int MAX_SHORT_TEXT = 1006;
+    public static final int MAX_PARTS = 243;
+    public static final int MAX_SHORT_TEXT = 973;
     private static final int CONTROL_MIN_LENGTH = 1 + MACBYTES;
     public static final int DATA_MIN_LENGTH = DATA_HEADER_SIZE + CONTROL_MIN_LENGTH;
     private static final long MAX_FILE_SIZE = 4 * 1024 * 1024;
 
     public static final short PROTOCOL_VERSION = 0;
 
-    private static final int STATE_SEND_HEL = 0;
-    private static final int STATE_RECV_HEL = 1;
+    private static final int STATE_SEND_HELLO = 0;
+    private static final int STATE_RECV_HELLO = 1;
     private static final int STATE_SEND_DATA_HELLO = 2;
-    private static final int STATE_SEND_LO = 3;
-    private static final int STATE_RECV_LO = 4;
-    private static final int STATE_READY = 5;
+    private static final int STATE_READY = 3;
 
-    private static final byte MTYPE_ACK_SERVER = 0;
-    private static final byte MTYPE_DACK_SERVER = 1;
-    private static final byte MTYPE_TEXT_MESSAGE_CLIENT = 2;
-    private static final byte MTYPE_PART_MESSAGE_CLIENT = 3;
+    private static final byte MTYPE_ACK_SERVER = 1;
+    private static final byte MTYPE_DACK_SERVER = 2;
+    private static final byte MTYPE_TEXT_MESSAGE_CLIENT = 3;
+    private static final byte MTYPE_PART_MESSAGE_CLIENT = 4;
 
     private static final byte PTYPE_PHOTOS = 1;
 
@@ -165,6 +163,7 @@ public class Session implements Runnable {
         controlRecvBuf.clear();
         dataRecvBuf.clear();
         byte[] pubkey = Crypto.getPublicKey();
+        int subuser = 0;
         byte[] peerpubkey = new byte[32]; // TODO actually specify a peer.
         crypto = new Crypto();
         controlClientCounter = 0;
@@ -172,7 +171,7 @@ public class Session implements Runnable {
         controlServerCounter = 0;
         dataServerCounter = 0;
         byte[] sessionToken = new byte[32];
-        state = STATE_SEND_HEL;
+        state = STATE_SEND_HELLO;
         try {
             try {
                 // TODO notify app on connection established
@@ -194,7 +193,7 @@ public class Session implements Runnable {
                     throw new SocketFailure(e);
                 }
                 if (controlKey.isReadable()) {
-                    if (state == STATE_SEND_HEL || state == STATE_SEND_DATA_HELLO || state == STATE_SEND_LO) {
+                    if (state == STATE_SEND_HELLO || state == STATE_SEND_DATA_HELLO) {
                         throw new ProtocolFailure("Received data in send state " + state);
                     }
                     read(controlChannel, controlRecvBuf);
@@ -211,7 +210,7 @@ public class Session implements Runnable {
                         int end = controlRecvBuf.position();
                         controlRecvBuf.position(LENGTH_SIZE);
                         controlRecvBuf.limit(LENGTH_SIZE + length);
-                        if (state == STATE_RECV_HEL) {
+                        if (state == STATE_RECV_HELLO) {
                             int error = ub2i(controlRecvBuf.get());
                             if (error == 0) {
                                 crypto.setNonce2(controlRecvBuf.getLong());
@@ -240,38 +239,8 @@ public class Session implements Runnable {
                             throw new AuthenticationFailure(true);
                         }
                         //TODO handle the message
-                        if (state == STATE_RECV_HEL) {
+                        if (state == STATE_RECV_HELLO) {
                             controlRecvBuf.get(sessionToken);
-                            int ourColor = controlRecvBuf.getInt();
-                            byte[] ourAvatarSha256 = new byte[32];
-                            controlRecvBuf.get(ourAvatarSha256);
-                            byte[] ourName = new byte[controlRecvBuf.remaining()];
-                            controlRecvBuf.get(ourName);
-                            listener.receivedOurColor(ourColor);
-                            listener.receivedOurName(utf8Decode(ourName));
-                            listener.receivedOurAvatarSha256(ourAvatarSha256);
-                            state++;
-                        } else if (state == STATE_RECV_LO) {
-                            int error = ub2i(controlRecvBuf.get());
-                            if (error == 0) {
-                                int peerColor = controlRecvBuf.getInt();
-                                byte[] peerAvatarSha256 = new byte[32];
-                                controlRecvBuf.get(peerAvatarSha256);
-                                byte[] peerName = new byte[controlRecvBuf.remaining()];
-                                controlRecvBuf.get(peerName);
-                                listener.receivedPeerColor(peerColor);
-                                listener.receivedPeerName(utf8Decode(peerName));
-                                listener.receivedPeerAvatarSha256(peerAvatarSha256);
-                            } else if (error == 1) {
-                                throw new Failure() {
-                                    @Override
-                                    public void notifyListener(SessionListener listener) {
-                                        listener.unknownPeer();
-                                    }
-                                };
-                            } else {
-                                throw new ProtocolFailure("Invalid error code " + error);
-                            }
                             state++;
                         } else if (state == STATE_READY) {
                             int type = ub2i(controlRecvBuf.get());
@@ -349,16 +318,12 @@ public class Session implements Runnable {
                         writeAndUpdateState(controlChannel, controlSendBuf);
                     }
                     if (!controlSendBuf.hasRemaining()) {
-                        if (state == STATE_SEND_HEL) {
+                        if (state == STATE_SEND_HELLO) {
                             newControlMessage();
                             controlSendBuf.putShort(PROTOCOL_VERSION);
                             controlSendBuf.putLong(crypto.getNonce1());
                             controlSendBuf.put(pubkey);
                             sendControlMessage(false);
-                        } else if (state == STATE_SEND_LO) {
-                            newControlMessage();
-                            controlSendBuf.put(peerpubkey);
-                            sendControlMessage(true);
                         } else if (state == STATE_READY) {
                             while (!messagesToSend.isEmpty() && !controlSendBuf.hasRemaining()) {
                                 newControlMessage();
@@ -369,13 +334,16 @@ public class Session implements Runnable {
                                     // TODO: BIGTEXT
                                     ASSERT(encoded.length <= MAX_SHORT_TEXT, "Message too long");
                                     controlSendBuf.put(MTYPE_TEXT_MESSAGE_CLIENT);
+                                    controlSendBuf.put(peerpubkey);
+                                    controlSendBuf.put((byte)subuser);
                                     controlSendBuf.put(encoded);
                                 } else if (message.type == Message.TYPE_PHOTOS) {
                                     ASSERT(message.photos.length <= MAX_PARTS, "Too many photos");
                                     controlSendBuf.put(MTYPE_PART_MESSAGE_CLIENT);
+                                    controlSendBuf.put(peerpubkey);
+                                    controlSendBuf.put((byte)subuser);
                                     controlSendBuf.put(PTYPE_PHOTOS);
                                     for (int i = 0; i < message.photos.length; i++) {
-                                        controlSendBuf.put((byte) ' ');
                                         message.photoSizes[i] = message.photos[i].length();
                                         if (message.photoSizes[i] == 0) {
                                             throw new FilesystemFailure("Photo file does not exist");
@@ -451,7 +419,7 @@ public class Session implements Runnable {
                         }
                     }
                 }
-                if (state != STATE_SEND_HEL && state != STATE_SEND_LO &&
+                if (state != STATE_SEND_HELLO &&
                         !controlSendBuf.hasRemaining() &&
                         messagesToSend.isEmpty() &&
                         (controlKey.interestOps() & OP_WRITE) != 0) {
