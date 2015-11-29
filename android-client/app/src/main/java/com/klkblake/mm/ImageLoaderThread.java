@@ -4,8 +4,8 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.util.LruCache;
+import android.view.View;
 import android.view.WindowManager;
-import android.widget.ListView;
 
 import java.util.ArrayDeque;
 
@@ -14,21 +14,21 @@ import java.util.ArrayDeque;
  */
 public class ImageLoaderThread extends Thread {
     private final String photosDir;
-    private final ListView view;
-    private final ChatActivity.MessageListAdapter adapter;
+    private final View view;
+    private final ChatActivity.MessageListAdapter listAdapter;
+    private final PhotosActivity.PhotosPagerAdapter pagerAdapter;
 
     private boolean die = false;
     private final ArrayDeque<ImageLoadRequest> loadImageRequests = new ArrayDeque<>();
     // TODO do we want to decode ahead of a scroll?
     private LruCache<ImageLoadRequest, Bitmap> imageCache;
 
-    // TODO use this from PhotoActivity as well.
-    public ImageLoaderThread(String photosDir, ListView view, ChatActivity.MessageListAdapter adapter) {
+    private ImageLoaderThread(String photosDir, View view, ChatActivity.MessageListAdapter listAdapter, PhotosActivity.PhotosPagerAdapter pagerAdapter) {
         super("Image Loader");
         this.photosDir = photosDir;
         this.view = view;
-        this.adapter = adapter;
-
+        this.listAdapter = listAdapter;
+        this.pagerAdapter = pagerAdapter;
         WindowManager wm = (WindowManager) App.context.getSystemService(Context.WINDOW_SERVICE);
         Point size = new Point();
         wm.getDefaultDisplay().getSize(size);
@@ -48,6 +48,13 @@ public class ImageLoaderThread extends Thread {
                 return value.getByteCount();
             }
         };
+    }
+    public ImageLoaderThread(String photosDir, View view, ChatActivity.MessageListAdapter adapter) {
+        this(photosDir, view, adapter, null);
+    }
+
+    public ImageLoaderThread(String photosDir, View view, PhotosActivity.PhotosPagerAdapter adapter) {
+        this(photosDir, view, null, adapter);
     }
 
     @Override
@@ -76,12 +83,21 @@ public class ImageLoaderThread extends Thread {
                 loadedAnImage = true;
             }
             if (loadedAnImage) {
-                view.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        adapter.notifyDataSetChanged();
-                    }
-                });
+                if (listAdapter != null) {
+                    view.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            listAdapter.notifyDataSetChanged();
+                        }
+                    });
+                } else if (pagerAdapter != null) {
+                    view.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            pagerAdapter.notifyDataSetChanged();
+                        }
+                    });
+                }
             }
             synchronized (loadImageRequests) {
                 if (die || !loadImageRequests.isEmpty()) {

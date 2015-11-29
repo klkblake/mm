@@ -5,7 +5,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
-import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -16,7 +15,6 @@ import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AbsListView;
@@ -270,7 +268,7 @@ public class ChatActivity extends AppActivity {
 
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
-            int messageID = messageIDStart + position;
+            final int messageID = messageIDStart + position;
             Message message = service.getMessage(messageIDStart + position);
             Context context = parent.getContext();
             switch (message.type) {
@@ -383,12 +381,12 @@ public class ChatActivity extends AppActivity {
                             entry.setImageBitmap(loader.request(messageID, part, false, entryWidth));
                         }
                     }
-                    final String messageDir = photosDir + "/" + messageID;
                     view.setOnClickListener(new View.OnClickListener() {
                         @Override
                         public void onClick(View v) {
                             Intent intent = new Intent(App.context, PhotosActivity.class);
-                            intent.putExtra(PhotosActivity.EXTRA_PHOTO_DIR, messageDir);
+                            intent.putExtra(PhotosActivity.EXTRA_PHOTOS_DIR, photosDir);
+                            intent.putExtra(PhotosActivity.EXTRA_MESSAGE_ID, messageID);
                             intent.putExtra(PhotosActivity.EXTRA_PHOTO_COUNT, count);
                             App.startActivity(intent);
                         }
