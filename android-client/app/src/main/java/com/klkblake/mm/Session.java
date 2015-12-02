@@ -5,6 +5,7 @@ import com.klkblake.mm.Failure.AuthenticationFailure;
 import com.klkblake.mm.Failure.FilesystemFailure;
 import com.klkblake.mm.Failure.ProtocolFailure;
 import com.klkblake.mm.Failure.SocketFailure;
+import com.klkblake.mm.common.Util;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -23,11 +24,10 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static com.klkblake.mm.Crypto.MACBYTES;
 import static com.klkblake.mm.Message.TYPE_TEXT;
-import static com.klkblake.mm.Util.min;
-import static com.klkblake.mm.Util.ub2i;
-import static com.klkblake.mm.Util.us2i;
-import static com.klkblake.mm.Util.utf8Decode;
-import static com.klkblake.mm.Util.utf8Encode;
+import static com.klkblake.mm.common.Util.min;
+import static com.klkblake.mm.common.Util.ub2i;
+import static com.klkblake.mm.common.Util.us2i;
+import static com.klkblake.mm.common.Util.utf8Encode;
 import static java.nio.channels.SelectionKey.OP_READ;
 import static java.nio.channels.SelectionKey.OP_WRITE;
 

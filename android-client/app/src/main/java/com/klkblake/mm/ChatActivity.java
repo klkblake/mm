@@ -32,9 +32,9 @@ import java.io.IOException;
 import static com.klkblake.mm.App.toast;
 import static com.klkblake.mm.Message.TYPE_PHOTOS;
 import static com.klkblake.mm.Message.TYPE_TEXT;
-import static com.klkblake.mm.Util.isDark;
-import static com.klkblake.mm.Util.max;
-import static com.klkblake.mm.Util.min;
+import static com.klkblake.mm.common.Util.isDark;
+import static com.klkblake.mm.common.Util.max;
+import static com.klkblake.mm.common.Util.min;
 
 
 public class ChatActivity extends AppActivity {

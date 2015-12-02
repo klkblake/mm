@@ -1,15 +1,9 @@
 package com.klkblake.mm;
 
-import android.content.Context;
 import android.content.Intent;
-import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.os.Bundle;
-import android.os.Parcelable;
-import android.util.Log;
-import android.view.ContextThemeWrapper;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AdapterView;
@@ -19,13 +13,13 @@ import android.widget.TextView;
 
 import java.util.ArrayList;
 
-import static com.klkblake.mm.Util.isDark;
+import static com.klkblake.mm.common.Util.isDark;
 
 public class MainActivity extends AppActivity {
     private AndroidUser[] contacts = new AndroidUser[]{
             new AndroidUser("Test User", 0xffffcccc, new byte[32], 0, null),
-            new AndroidUser("Test User", 0xff689426, new byte[32], 0, null),
-            new AndroidUser("Test User", 0xff9d3bf5, new byte[32], 0, null),
+            new AndroidUser("Test User", 0xffe2b449, new byte[32], 0, null),
+            new AndroidUser("Test User", 0xffe1b27a, new byte[32], 0, null),
             new AndroidUser("Test User", 0xffffffff, new byte[32], 0, null),
             new AndroidUser("Test User 1.1", 0xffffccff, new byte[32], 0, null),
             new AndroidUser("Test User2", 0xffcc0033, new byte[32], 0, null),
@@ -33,8 +27,8 @@ public class MainActivity extends AppActivity {
 
     {
         contacts[3].addSubUser("Test User", 0xfffafafa, new byte[32], 0, null);
-        contacts[3].addSubUser("Test User", 0xffc85516, new byte[32], 0, null);
-        contacts[3].addSubUser("Test User", 0xffc85515, new byte[32], 0, null);
+        contacts[3].addSubUser("Test User", 0xffe2b449, new byte[32], 0, null);
+        contacts[3].addSubUser("Test User", 0xffe2b448, new byte[32], 0, null);
         contacts[3].addSubUser("Test User", 0xff303030, new byte[32], 0, null);
         contacts[3].addSubUser("Test User", 0xff000000, new byte[32], 0, null);
         contacts[4].addSubUser("Test User 1.2", 0xff4400cc, new byte[32], 0, null);

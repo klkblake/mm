@@ -2,7 +2,7 @@ package com.klkblake.mm;
 
 import java.util.Arrays;
 
-import static com.klkblake.mm.Util.max;
+import static com.klkblake.mm.common.Util.max;
 
 /**
  * Created by kyle on 6/10/15.

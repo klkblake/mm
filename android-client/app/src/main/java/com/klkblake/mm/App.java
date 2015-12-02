@@ -14,10 +14,8 @@ import android.support.v4.content.FileProvider;
 import android.widget.Toast;
 
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.InputStream;
 
-import static com.klkblake.mm.Util.calculateSampleSize;
+import static com.klkblake.mm.common.Util.calculateSampleSize;
 
 /**
  * Created by kyle on 5/10/15.
