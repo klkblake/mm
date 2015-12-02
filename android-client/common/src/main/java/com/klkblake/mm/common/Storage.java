@@ -17,15 +17,15 @@ public class Storage {
     // TODO always have metadata for *all* previous messages stored
     final String photosDir;
     // FIXME signed/unsigned bugs. probably store compressed here, and expand in use?
-    LongArray timestamps = new LongArray();
-    BooleanArray authors = new BooleanArray();
-    IntArray indexes = new IntArray();
+    final LongArray timestamps = new LongArray();
+    final BooleanArray authors = new BooleanArray();
+    final IntArray indexes = new IntArray();
     // Type 0 - Pending content
     // TODO implement pending data
     // Type 1 - Text
-    ArrayList<byte[]> texts = new ArrayList<>(); // TODO manual string alloc?
+    final ArrayList<byte[]> texts = new ArrayList<>(); // TODO manual string alloc?
     // Type 2 - Photos
-    ShortArray photoCounts = new ShortArray();
+    final ShortArray photoCounts = new ShortArray();
 
     public Storage(String photosDir) {
         this.photosDir = photosDir;

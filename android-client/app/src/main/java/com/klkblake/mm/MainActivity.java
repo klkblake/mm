@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import static com.klkblake.mm.common.Util.isDark;
 
 public class MainActivity extends AppActivity {
-    private AndroidUser[] contacts = new AndroidUser[]{
+    private final AndroidUser[] contacts = new AndroidUser[]{
             new AndroidUser("Test User", 0xffffcccc, new byte[32], 0, null),
             new AndroidUser("Test User", 0xffe2b449, new byte[32], 0, null),
             new AndroidUser("Test User", 0xffe1b27a, new byte[32], 0, null),

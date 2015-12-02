@@ -33,7 +33,7 @@ public class Session implements Runnable {
     public static final int MAX_CHUNK_SIZE = 65536;
     public static final int MAX_PARTS = 243;
     public static final int MAX_SHORT_TEXT = 973;
-    private static final int CONTROL_MIN_LENGTH = 1 + Crypto.MACBYTES;
+    private static final int CONTROL_MIN_LENGTH = 1 + MACBYTES;
     public static final int DATA_MIN_LENGTH = DATA_HEADER_SIZE + CONTROL_MIN_LENGTH;
     private static final long MAX_FILE_SIZE = 4 * 1024 * 1024;
 
@@ -57,10 +57,10 @@ public class Session implements Runnable {
     private SocketChannel dataChannel;
     private SelectionKey controlKey;
     private SelectionKey dataKey;
-    private ByteBuffer controlSendBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + 1024 + Crypto.MACBYTES);
-    private ByteBuffer controlRecvBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + 1024 + Crypto.MACBYTES);
-    private ByteBuffer dataSendBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + DATA_HEADER_SIZE + MAX_CHUNK_SIZE + Crypto.MACBYTES);
-    private ByteBuffer dataRecvBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + DATA_HEADER_SIZE + MAX_CHUNK_SIZE + Crypto.MACBYTES);
+    private final ByteBuffer controlSendBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + 1024 + Crypto.MACBYTES);
+    private final ByteBuffer controlRecvBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + 1024 + Crypto.MACBYTES);
+    private final ByteBuffer dataSendBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + DATA_HEADER_SIZE + MAX_CHUNK_SIZE + Crypto.MACBYTES);
+    private final ByteBuffer dataRecvBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + DATA_HEADER_SIZE + MAX_CHUNK_SIZE + Crypto.MACBYTES);
     // TODO make sure to track pending data transfer set so we can resume after net drop
 
     private final ConcurrentLinkedQueue<SendingMessage> messagesToSend = new ConcurrentLinkedQueue<>();

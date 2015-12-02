@@ -20,18 +20,10 @@ import android.widget.TextView;
  */
 public abstract class ColoredListAdapter extends BaseAdapter {
     private final ContextThemeWrapper lightContext, darkContext;
-    protected int textColorLight, textColorDark;
 
     public ColoredListAdapter(Context context) {
         lightContext = new ContextThemeWrapper(context, R.style.ThemeOverlay_AppCompat_Light);
         darkContext = new ContextThemeWrapper(context, R.style.ThemeOverlay_AppCompat_Dark);
-        TypedArray colors = App.context.getTheme().obtainStyledAttributes(new int[]{
-                android.R.attr.textColorPrimary,
-                android.R.attr.textColorPrimaryInverse
-        });
-        textColorLight = colors.getColor(0, 0xffffffff);
-        textColorDark = colors.getColor(1, 0xff000000);
-        colors.recycle();
     }
 
     protected ContextThemeWrapper contextForTheme(boolean isDark) {

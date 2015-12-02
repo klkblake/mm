@@ -23,7 +23,7 @@ public class ImageLoaderThread extends Thread {
     private boolean die = false;
     private final ArrayDeque<ImageLoadRequest> loadImageRequests = new ArrayDeque<>();
     // TODO do we want to decode ahead of a scroll?
-    private LruCache<ImageLoadRequest, Bitmap> imageCache;
+    private final LruCache<ImageLoadRequest, Bitmap> imageCache;
 
     private ImageLoaderThread(String photosDir, View view, ChatActivity.MessageListAdapter listAdapter, PhotosActivity.PhotosPagerAdapter pagerAdapter) {
         super("Image Loader");

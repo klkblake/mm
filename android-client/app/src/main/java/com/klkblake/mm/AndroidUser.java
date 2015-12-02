@@ -14,7 +14,7 @@ public class AndroidUser extends User<Bitmap> implements Parcelable {
         super(name, color, avatarSHA256, avatarSize, avatar);
     }
 
-    protected AndroidUser(Parcel in) {
+    private AndroidUser(Parcel in) {
         in.readByteArray(pubkey);
         int count = in.readInt();
         subusers.ensureCapacity(count);
