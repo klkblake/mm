@@ -1,11 +1,13 @@
-package com.klkblake.mm;
+package com.klkblake.mm.common;
 
+import com.klkblake.mm.common.Message;
+import com.klkblake.mm.common.SendingData;
 import com.klkblake.mm.common.Util;
 
 import java.io.File;
 import java.util.ArrayList;
 
-import static com.klkblake.mm.Failure.*;
+import static com.klkblake.mm.common.Failure.*;
 
 public class Storage {
     // TODO Always have all past messages loaded

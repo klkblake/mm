@@ -11,6 +11,11 @@ import android.os.ParcelFileDescriptor;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
 
+import com.klkblake.mm.common.Message;
+import com.klkblake.mm.common.Session;
+import com.klkblake.mm.common.SessionListener;
+import com.klkblake.mm.common.Storage;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;

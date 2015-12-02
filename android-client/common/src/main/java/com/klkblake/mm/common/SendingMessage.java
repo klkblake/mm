@@ -1,4 +1,4 @@
-package com.klkblake.mm;
+package com.klkblake.mm.common;
 
 import java.io.File;
 import java.util.Arrays;

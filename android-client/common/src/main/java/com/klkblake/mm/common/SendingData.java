@@ -1,9 +1,9 @@
-package com.klkblake.mm;
+package com.klkblake.mm.common;
 
 import java.io.File;
 import java.nio.channels.FileChannel;
 
-import static com.klkblake.mm.Session.MAX_CHUNK_SIZE;
+import static com.klkblake.mm.common.Session.MAX_CHUNK_SIZE;
 
 /**
  * Created by kyle on 23/10/15.

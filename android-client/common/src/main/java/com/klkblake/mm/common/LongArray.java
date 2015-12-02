@@ -1,4 +1,4 @@
-package com.klkblake.mm;
+package com.klkblake.mm.common;
 
 import java.util.Arrays;
 
@@ -7,22 +7,22 @@ import static com.klkblake.mm.common.Util.max;
 /**
  * Created by kyle on 6/10/15.
  */
-public class BooleanArray {
-    public boolean[] data = new boolean[16];
+public class LongArray {
+    public long[] data = new long[16];
     public int count = 0;
 
     private void grow() {
         data = Arrays.copyOf(data, data.length * 3 / 2);
     }
 
-    public void add(boolean value) {
+    public void add(long value) {
         if (data.length == count) {
             grow();
         }
         data[count++] = value;
     }
 
-    public void set(int index, boolean value) {
+    public void set(int index, long value) {
         while (index >= data.length) {
             grow();
         }

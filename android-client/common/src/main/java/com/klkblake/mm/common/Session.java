@@ -1,11 +1,4 @@
-package com.klkblake.mm;
-
-import com.klkblake.mm.Failure.AssertionFailure;
-import com.klkblake.mm.Failure.AuthenticationFailure;
-import com.klkblake.mm.Failure.FilesystemFailure;
-import com.klkblake.mm.Failure.ProtocolFailure;
-import com.klkblake.mm.Failure.SocketFailure;
-import com.klkblake.mm.common.Util;
+package com.klkblake.mm.common;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -22,8 +15,7 @@ import java.util.ArrayDeque;
 import java.util.PriorityQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import static com.klkblake.mm.Crypto.MACBYTES;
-import static com.klkblake.mm.Message.TYPE_TEXT;
+import static com.klkblake.mm.common.Crypto.MACBYTES;
 import static com.klkblake.mm.common.Util.min;
 import static com.klkblake.mm.common.Util.ub2i;
 import static com.klkblake.mm.common.Util.us2i;
@@ -41,7 +33,7 @@ public class Session implements Runnable {
     public static final int MAX_CHUNK_SIZE = 65536;
     public static final int MAX_PARTS = 243;
     public static final int MAX_SHORT_TEXT = 973;
-    private static final int CONTROL_MIN_LENGTH = 1 + MACBYTES;
+    private static final int CONTROL_MIN_LENGTH = 1 + Crypto.MACBYTES;
     public static final int DATA_MIN_LENGTH = DATA_HEADER_SIZE + CONTROL_MIN_LENGTH;
     private static final long MAX_FILE_SIZE = 4 * 1024 * 1024;
 
@@ -65,10 +57,10 @@ public class Session implements Runnable {
     private SocketChannel dataChannel;
     private SelectionKey controlKey;
     private SelectionKey dataKey;
-    private ByteBuffer controlSendBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + 1024 + MACBYTES);
-    private ByteBuffer controlRecvBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + 1024 + MACBYTES);
-    private ByteBuffer dataSendBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + DATA_HEADER_SIZE + MAX_CHUNK_SIZE + MACBYTES);
-    private ByteBuffer dataRecvBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + DATA_HEADER_SIZE + MAX_CHUNK_SIZE + MACBYTES);
+    private ByteBuffer controlSendBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + 1024 + Crypto.MACBYTES);
+    private ByteBuffer controlRecvBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + 1024 + Crypto.MACBYTES);
+    private ByteBuffer dataSendBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + DATA_HEADER_SIZE + MAX_CHUNK_SIZE + Crypto.MACBYTES);
+    private ByteBuffer dataRecvBuf = ByteBuffer.allocateDirect(LENGTH_SIZE + DATA_HEADER_SIZE + MAX_CHUNK_SIZE + Crypto.MACBYTES);
     // TODO make sure to track pending data transfer set so we can resume after net drop
 
     private final ConcurrentLinkedQueue<SendingMessage> messagesToSend = new ConcurrentLinkedQueue<>();
@@ -109,26 +101,26 @@ public class Session implements Runnable {
         new Thread(this, "Session Thread").start();
     }
 
-    private static void ASSERT(boolean cond, String message) throws AssertionFailure {
+    private static void ASSERT(boolean cond, String message) throws Failure.AssertionFailure {
         if (!cond) {
-            throw new AssertionFailure(message);
+            throw new Failure.AssertionFailure(message);
         }
     }
 
-    private static void read(SocketChannel channel, ByteBuffer buf) throws SocketFailure {
+    private static void read(SocketChannel channel, ByteBuffer buf) throws Failure.SocketFailure {
         try {
             channel.read(buf);
         } catch (IOException e) {
-            throw new SocketFailure(e);
+            throw new Failure.SocketFailure(e);
         }
     }
 
-    private void writeAndUpdateState(SocketChannel channel, ByteBuffer buf) throws SocketFailure, AssertionFailure {
+    private void writeAndUpdateState(SocketChannel channel, ByteBuffer buf) throws Failure.SocketFailure, Failure.AssertionFailure {
         ASSERT(buf.hasRemaining(), "tried to write empty buffer");
         try {
             channel.write(buf);
         } catch (IOException e) {
-            throw new SocketFailure(e);
+            throw new Failure.SocketFailure(e);
         }
         if (state != STATE_READY && !buf.hasRemaining()) {
             state++;
@@ -140,7 +132,7 @@ public class Session implements Runnable {
         controlSendBuf.limit(controlSendBuf.capacity());
     }
 
-    private void sendControlMessage(boolean doEncrypt) throws AssertionFailure, SocketFailure {
+    private void sendControlMessage(boolean doEncrypt) throws Failure.AssertionFailure, Failure.SocketFailure {
         controlSendBuf.limit(controlSendBuf.position());
         if (doEncrypt) {
             controlSendBuf.position(LENGTH_SIZE);
@@ -184,26 +176,26 @@ public class Session implements Runnable {
                 controlKey = controlChannel.register(selector, OP_READ);
                 dataKey = dataChannel.register(selector, OP_READ);
             } catch (IOException e) {
-                throw new SocketFailure(e);
+                throw new Failure.SocketFailure(e);
             }
             while (!dead) {
                 try {
                     selector.select();
                 } catch (IOException e) {
-                    throw new SocketFailure(e);
+                    throw new Failure.SocketFailure(e);
                 }
                 if (controlKey.isReadable()) {
                     if (state == STATE_SEND_HELLO || state == STATE_SEND_DATA_HELLO) {
-                        throw new ProtocolFailure("Received data in send state " + state);
+                        throw new Failure.ProtocolFailure("Received data in send state " + state);
                     }
                     read(controlChannel, controlRecvBuf);
                     while (controlRecvBuf.position() >= LENGTH_SIZE) {
                         int length = Util.us2i(controlRecvBuf.getShort(0));
                         length++;
                         if (length > CONTROL_LENGTH_MAX) {
-                            throw new ProtocolFailure("Message length " + length + " exceeded cap " + CONTROL_LENGTH_MAX);
+                            throw new Failure.ProtocolFailure("Message length " + length + " exceeded cap " + CONTROL_LENGTH_MAX);
                         }
-                        length += MACBYTES;
+                        length += Crypto.MACBYTES;
                         if (controlRecvBuf.position() < LENGTH_SIZE + length) {
                             break;
                         }
@@ -231,12 +223,12 @@ public class Session implements Runnable {
                                     }
                                 };
                             } else {
-                                throw new ProtocolFailure("Invalid error code " + error);
+                                throw new Failure.ProtocolFailure("Invalid error code " + error);
                             }
                         }
                         boolean verified = crypto.decrypt(controlRecvBuf, controlServerCounter++ * 2 + 1);
                         if (!verified) {
-                            throw new AuthenticationFailure(true);
+                            throw new Failure.AuthenticationFailure(true);
                         }
                         //TODO handle the message
                         if (state == STATE_RECV_HELLO) {
@@ -248,16 +240,16 @@ public class Session implements Runnable {
                                 long id = controlRecvBuf.getLong();
                                 long timestamp = controlRecvBuf.getLong();
                                 if (id < 0) {
-                                    throw new ProtocolFailure("Received ACK with negative message ID");
+                                    throw new Failure.ProtocolFailure("Received ACK with negative message ID");
                                 }
                                 if (timestamp < 0) {
-                                    throw new ProtocolFailure("Received ACK with negative timestamp ID");
+                                    throw new Failure.ProtocolFailure("Received ACK with negative timestamp ID");
                                 }
                                 SendingMessage message = messagesPending.poll();
                                 if (message == null) {
-                                    throw new ProtocolFailure("Received ACK with no messages pending");
+                                    throw new Failure.ProtocolFailure("Received ACK with no messages pending");
                                 }
-                                if (message.type == TYPE_TEXT) {
+                                if (message.type == Message.TYPE_TEXT) {
                                     storage.storeMessage(id, timestamp, Message.AUTHOR_US, message.message);
                                     listener.receivedMessage(id, timestamp, Message.AUTHOR_US, message.message);
                                 } else if (message.type == Message.TYPE_PHOTOS) {
@@ -273,19 +265,19 @@ public class Session implements Runnable {
                                 int part = ub2i(controlRecvBuf.get());
                                 SendingData data = dataPending.poll();
                                 if (data == null) {
-                                    throw new ProtocolFailure("Received DACK for non-pending data");
+                                    throw new Failure.ProtocolFailure("Received DACK for non-pending data");
                                 }
                                 if (data.messageID != id || data.partID != part) {
-                                    throw new ProtocolFailure(String.format("Received out of order DACK. Got %d:%d, expected %d:%d",
+                                    throw new Failure.ProtocolFailure(String.format("Received out of order DACK. Got %d:%d, expected %d:%d",
                                             id, part, data.messageID, data.partID));
                                 }
                                 storage.storePhoto(data);
                                 listener.receivedPart(data.messageID, data.partID);
                             } else {
-                                throw new ProtocolFailure("Illegal server message type " + type);
+                                throw new Failure.ProtocolFailure("Illegal server message type " + type);
                             }
                         } else {
-                            throw new ProtocolFailure("Received message in unexpected state " + state);
+                            throw new Failure.ProtocolFailure("Received message in unexpected state " + state);
                         }
                         controlRecvBuf.limit(end);
                         controlRecvBuf.position(LENGTH_SIZE + length);
@@ -305,7 +297,7 @@ public class Session implements Runnable {
                         dataRecvBuf.limit(LENGTH_SIZE + length);
                         boolean verified = crypto.decrypt(dataRecvBuf, ~(dataServerCounter++ * 2 + 1));
                         if (!verified) {
-                            throw new AuthenticationFailure(false);
+                            throw new Failure.AuthenticationFailure(false);
                         }
                         //TODO handle the message
                         dataRecvBuf.limit(end);
@@ -329,7 +321,7 @@ public class Session implements Runnable {
                                 newControlMessage();
                                 SendingMessage message = messagesToSend.remove();
                                 messagesPending.add(message);
-                                if (message.type == TYPE_TEXT) {
+                                if (message.type == Message.TYPE_TEXT) {
                                     byte[] encoded = utf8Encode(message.message);
                                     // TODO: BIGTEXT
                                     ASSERT(encoded.length <= MAX_SHORT_TEXT, "Message too long");
@@ -346,15 +338,15 @@ public class Session implements Runnable {
                                     for (int i = 0; i < message.photos.length; i++) {
                                         message.photoSizes[i] = message.photos[i].length();
                                         if (message.photoSizes[i] == 0) {
-                                            throw new FilesystemFailure("Photo file does not exist");
+                                            throw new Failure.FilesystemFailure("Photo file does not exist");
                                         }
                                         if (message.photoSizes[i] > MAX_FILE_SIZE) {
-                                            throw new FilesystemFailure("Photo is too big");
+                                            throw new Failure.FilesystemFailure("Photo is too big");
                                         }
                                         controlSendBuf.putInt((int) message.photoSizes[i]);
                                     }
                                 } else {
-                                    throw new ProtocolFailure("Illegal client message type " + message.type);
+                                    throw new Failure.ProtocolFailure("Illegal client message type " + message.type);
                                 }
                                 sendControlMessage(true);
                             }
@@ -379,7 +371,7 @@ public class Session implements Runnable {
                                     try {
                                         data.channel = new FileInputStream(data.photo).getChannel();
                                     } catch (FileNotFoundException e) {
-                                        throw new FilesystemFailure(e);
+                                        throw new Failure.FilesystemFailure(e);
                                     }
                                 }
                                 long remaining = data.photoSize - data.chunksSent * MAX_CHUNK_SIZE;
@@ -399,7 +391,7 @@ public class Session implements Runnable {
                                         data.channel.read(dataSendBuf);
                                     }
                                 } catch (IOException e) {
-                                    throw new FilesystemFailure(e);
+                                    throw new Failure.FilesystemFailure(e);
                                 }
                                 // XXX only do for encrypted messages
                                 dataSendBuf.position(LENGTH_SIZE);
@@ -437,7 +429,7 @@ public class Session implements Runnable {
                 }
             }
         } catch (BufferUnderflowException e) {
-            failure = new ProtocolFailure("Message too short", e);
+            failure = new Failure.ProtocolFailure("Message too short", e);
         } catch (Failure f) {
             failure = f;
         }

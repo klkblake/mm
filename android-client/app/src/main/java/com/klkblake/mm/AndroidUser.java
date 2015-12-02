@@ -4,6 +4,8 @@ import android.graphics.Bitmap;
 import android.os.Parcel;
 import android.os.Parcelable;
 
+import com.klkblake.mm.common.User;
+
 /**
  * Created by kyle on 28/11/15.
  */
@@ -37,11 +39,11 @@ public class AndroidUser extends User<Bitmap> implements Parcelable {
         dest.writeByteArray(pubkey);
         dest.writeInt(subusers.size());
         for (SubUser subuser : subusers) {
-            dest.writeString(subuser.name);
-            dest.writeInt(subuser.color);
-            dest.writeByteArray(subuser.avatarSHA256);
-            dest.writeInt(subuser.avatarSize);
-            dest.writeParcelable(subuser.avatar, 0);
+            dest.writeString(subuser.getName());
+            dest.writeInt(subuser.getColor());
+            dest.writeByteArray(subuser.getAvatarSHA256());
+            dest.writeInt(subuser.getAvatarSize());
+            dest.writeParcelable(subuser.getAvatar(), 0);
         }
     }
 

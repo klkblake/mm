@@ -26,12 +26,14 @@ import android.widget.TableLayout;
 import android.widget.TableRow;
 import android.widget.TextView;
 
+import com.klkblake.mm.common.Message;
+
 import java.io.File;
 import java.io.IOException;
 
 import static com.klkblake.mm.App.toast;
-import static com.klkblake.mm.Message.TYPE_PHOTOS;
-import static com.klkblake.mm.Message.TYPE_TEXT;
+import static com.klkblake.mm.common.Message.TYPE_PHOTOS;
+import static com.klkblake.mm.common.Message.TYPE_TEXT;
 import static com.klkblake.mm.common.Util.isDark;
 import static com.klkblake.mm.common.Util.max;
 import static com.klkblake.mm.common.Util.min;

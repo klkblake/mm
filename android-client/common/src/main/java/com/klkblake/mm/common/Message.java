@@ -1,4 +1,4 @@
-package com.klkblake.mm;
+package com.klkblake.mm.common;
 
 /**
  * Created by kyle on 23/10/15.

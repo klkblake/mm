@@ -14,22 +14,22 @@ struct crypto_state {
 };
 
 JNIEXPORT jint JNICALL
-Java_com_klkblake_mm_Crypto_getMACBYTES(JNIEnv *env, jclass type) {
+Java_com_klkblake_mm_common_Crypto_getMACBYTES(JNIEnv *env, jclass type) {
     return crypto_box_MACBYTES;
 }
 
 JNIEXPORT jint JNICALL
-Java_com_klkblake_mm_Crypto_getPUBLICKEYBYTES(JNIEnv *env, jclass type) {
+Java_com_klkblake_mm_common_Crypto_getPUBLICKEYBYTES(JNIEnv *env, jclass type) {
     return crypto_box_PUBLICKEYBYTES;
 }
 
 JNIEXPORT jint JNICALL
-Java_com_klkblake_mm_Crypto_getSECRETKEYBYTES(JNIEnv *env, jclass type) {
+Java_com_klkblake_mm_common_Crypto_getSECRETKEYBYTES(JNIEnv *env, jclass type) {
     return crypto_box_SECRETKEYBYTES;
 }
 
 JNIEXPORT jlong JNICALL
-Java_com_klkblake_mm_Crypto_create(JNIEnv *env, jclass type, jbyteArray pubkey_,
+Java_com_klkblake_mm_common_Crypto_create(JNIEnv *env, jclass type, jbyteArray pubkey_,
                                    jbyteArray seckey_) {
     jbyte *pubkey = (*env)->GetByteArrayElements(env, pubkey_, NULL);
     jbyte *seckey = (*env)->GetByteArrayElements(env, seckey_, NULL);
@@ -45,13 +45,13 @@ Java_com_klkblake_mm_Crypto_create(JNIEnv *env, jclass type, jbyteArray pubkey_,
 }
 
 JNIEXPORT jlong JNICALL
-Java_com_klkblake_mm_Crypto_getNonce1(JNIEnv *env, jclass type, jlong ptr) {
+Java_com_klkblake_mm_common_Crypto_getNonce1(JNIEnv *env, jclass type, jlong ptr) {
     struct crypto_state *state = (struct crypto_state *) ptr;
     return state->nonce.nonce1;
 }
 
 JNIEXPORT void JNICALL
-Java_com_klkblake_mm_Crypto_setNonce2(JNIEnv *env, jclass type, jlong ptr, jlong nonce2) {
+Java_com_klkblake_mm_common_Crypto_setNonce2(JNIEnv *env, jclass type, jlong ptr, jlong nonce2) {
     struct crypto_state *state = (struct crypto_state *) ptr;
     state->nonce.nonce2 = nonce2;
 }
@@ -66,7 +66,7 @@ build_nonce(char nonce[static 24], struct crypto_state *state, jlong counter) {
 }
 
 JNIEXPORT void JNICALL
-Java_com_klkblake_mm_Crypto_encrypt(JNIEnv *env, jclass type, jlong ptr, jobject buf_, jint position,
+Java_com_klkblake_mm_common_Crypto_encrypt(JNIEnv *env, jclass type, jlong ptr, jobject buf_, jint position,
                                     jint limit, jlong counter) {
     struct crypto_state *state = (struct crypto_state *) ptr;
     u8 *buf = (*env)->GetDirectBufferAddress(env, buf_);
@@ -76,7 +76,7 @@ Java_com_klkblake_mm_Crypto_encrypt(JNIEnv *env, jclass type, jlong ptr, jobject
 }
 
 JNIEXPORT jboolean JNICALL
-Java_com_klkblake_mm_Crypto_decrypt(JNIEnv *env, jclass type, jlong ptr, jobject buf_, jint position,
+Java_com_klkblake_mm_common_Crypto_decrypt(JNIEnv *env, jclass type, jlong ptr, jobject buf_, jint position,
                                     jint limit, jlong counter) {
     struct crypto_state *state = (struct crypto_state *) ptr;
     u8 *buf = (*env)->GetDirectBufferAddress(env, buf_);
@@ -87,7 +87,7 @@ Java_com_klkblake_mm_Crypto_decrypt(JNIEnv *env, jclass type, jlong ptr, jobject
 }
 
 JNIEXPORT void JNICALL
-Java_com_klkblake_mm_Crypto_destroy(JNIEnv *env, jclass type, jlong ptr) {
+Java_com_klkblake_mm_common_Crypto_destroy(JNIEnv *env, jclass type, jlong ptr) {
     struct crypto_state *state = (struct crypto_state *) ptr;
     sodium_memzero(state, sizeof(*state));
     free(state);

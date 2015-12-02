@@ -16,6 +16,6 @@
 #   public *;
 #}
 
--keepclassmembers class com.klkblake.mm.Crypto {
+-keepclassmembers class com.klkblake.mm.common.Crypto {
     private long ptr;
 }

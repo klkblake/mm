@@ -1,4 +1,4 @@
-package com.klkblake.mm;
+package com.klkblake.mm.common;
 
 
 import com.klkblake.mm.common.Util;
@@ -23,7 +23,7 @@ public class User<T> {
         subusers.add(new SubUser(name, color, avatarSHA256, avatarSize, avatar));
     }
 
-    class SubUser {
+    public class SubUser {
         protected String name;
         protected int color;
         protected byte[] avatarSHA256;
@@ -52,6 +52,14 @@ public class User<T> {
 
         public boolean hasAvatar() {
             return avatar != null;
+        }
+
+        public byte[] getAvatarSHA256() {
+            return avatarSHA256;
+        }
+
+        public int getAvatarSize() {
+            return avatarSize;
         }
 
         public T getAvatar() {
