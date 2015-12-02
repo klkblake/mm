@@ -8,9 +8,6 @@ import android.os.Parcelable;
  * Created by kyle on 28/11/15.
  */
 public class AndroidUser extends User<Bitmap> implements Parcelable {
-    public AndroidUser() {
-    }
-
     public AndroidUser(String name, int color, byte[] avatarSHA256, int avatarSize, Bitmap avatar) {
         super(name, color, avatarSHA256, avatarSize, avatar);
     }

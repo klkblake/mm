@@ -32,6 +32,7 @@ import java.io.IOException;
 import static com.klkblake.mm.App.toast;
 import static com.klkblake.mm.Message.TYPE_PHOTOS;
 import static com.klkblake.mm.Message.TYPE_TEXT;
+import static com.klkblake.mm.Util.isDark;
 import static com.klkblake.mm.Util.max;
 import static com.klkblake.mm.Util.min;
 
@@ -232,6 +233,10 @@ public class ChatActivity extends AppActivity {
         private int messageIDStart = 0;
         private int messageCount = 0;
 
+        public MessageListAdapter() {
+            super(ChatActivity.this);
+        }
+
         @Override
         public int getCount() {
             return messageCount;
@@ -251,6 +256,16 @@ public class ChatActivity extends AppActivity {
         public int getItemViewType(int position) {
             Message message = service.getMessage(messageIDStart + position);
             int type = message.type;
+            if (type == TYPE_TEXT) {
+                int color;
+                // TODO actually look up author colors
+                if (message.author == Message.AUTHOR_US) {
+                    color = 0xffffaaaa;
+                } else {
+                    color = 0xffaaffaa;
+                }
+                return isDark(color) ? 0 : 1;
+            }
             if (type == TYPE_PHOTOS) {
                 int photoCount = message.photoCount;
                 if (photoCount > MAX_PREVIEW_PHOTOS) {
@@ -258,12 +273,13 @@ public class ChatActivity extends AppActivity {
                 }
                 type += photoCount - 1;
             }
-            return type;
+            return type + 1;
         }
 
         @Override
         public int getViewTypeCount() {
-            return TYPE_PHOTOS + MAX_PREVIEW_PHOTOS + 1;
+            // Text takes up two slots, since it can be dark or light
+            return 1 + TYPE_PHOTOS + MAX_PREVIEW_PHOTOS + 1;
         }
 
         @Override
@@ -273,11 +289,6 @@ public class ChatActivity extends AppActivity {
             Context context = parent.getContext();
             switch (message.type) {
                 case TYPE_TEXT: {
-                    TextView view = (TextView) convertView;
-                    if (view == null) {
-                        view = new TextView(context);
-                        initSelectableView(view, getDrawable(R.drawable.colored_selectable_item_background));
-                    }
                     int color;
                     // TODO actually look up author colors
                     if (message.author == Message.AUTHOR_US) {
@@ -285,7 +296,13 @@ public class ChatActivity extends AppActivity {
                     } else {
                         color = 0xffaaffaa;
                     }
-                    setSelectableBackgroundColor(view, color);
+                    TextView view = (TextView) convertView;
+                    if (view == null) {
+                        view = new TextView(contextForTheme(isDark(color)));
+                        initSelectableView(view, getDrawable(R.drawable.colored_selectable_item_background));
+                        bugfixPropagateHotspotChanges(view);
+                    }
+                    getSelectableBackgroundColor(view).setColor(color);
                     view.setText(message.text);
                     return view;
                 }

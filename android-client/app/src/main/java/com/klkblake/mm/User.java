@@ -10,7 +10,7 @@ public class User<T> {
     public final byte[] pubkey = new byte[32];
     public final ArrayList<SubUser> subusers = new ArrayList<>();
 
-    public User() {
+    protected User() {
     }
 
     public User(String name, int color, byte[] avatarSHA256, int avatarSize, T avatar) {
@@ -42,6 +42,10 @@ public class User<T> {
 
         public int getColor() {
             return color;
+        }
+
+        public boolean isDark() {
+            return Util.isDark(color);
         }
 
         public boolean hasAvatar() {
