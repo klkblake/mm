@@ -54,6 +54,7 @@ public class ChatActivity extends AppActivity {
     private ListView messageList;
     private EditText composeText;
     private FloatingActionButton sendButton;
+    private AndroidUser contact;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,6 +64,7 @@ public class ChatActivity extends AppActivity {
         composeText = (EditText) findViewById(R.id.composeText);
         sendButton = (FloatingActionButton) findViewById(R.id.sendButton);
 
+        contact = getIntent().getParcelableExtra(EXTRA_CONTACT);
         messages = new MessageListAdapter();
         messageList.setAdapter(messages);
         composeText.addTextChangedListener(new TextWatcher() {
@@ -143,7 +145,7 @@ public class ChatActivity extends AppActivity {
         if (text.length() == 0) {
             return;
         }
-        service.sendMessage(text);
+        service.sendMessage(contact, text);
         textContent.clear();
     }
 
@@ -185,7 +187,7 @@ public class ChatActivity extends AppActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == REQUEST_TAKE_PHOTO && resultCode == RESULT_OK) {
-            service.sendPhoto(tempPhotoPath);
+            service.sendPhoto(contact, tempPhotoPath);
         }
         if (requestCode == REQUEST_SELECT_PHOTOS && resultCode == RESULT_OK) {
             ClipData selected = data.getClipData();
@@ -199,7 +201,7 @@ public class ChatActivity extends AppActivity {
                     photoUris[i] = selected.getItemAt(i).getUri();
                 }
             }
-            service.sendPhotos(photoUris);
+            service.sendPhotos(contact, photoUris);
         }
     }
 

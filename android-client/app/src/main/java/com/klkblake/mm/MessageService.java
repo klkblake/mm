@@ -187,16 +187,16 @@ public final class MessageService extends Service implements SessionListener {
             return photosDir;
         }
 
-        public void sendMessage(String message) {
-            session.sendMessage(message);
+        public void sendMessage(AndroidUser contact, String message) {
+            session.sendMessage(contact, message);
         }
 
-        public void sendPhoto(String tempPhotoFile) {
-            session.sendPhotos(new File(tempPhotoFile));
+        public void sendPhoto(AndroidUser contact, String tempPhotoFile) {
+            session.sendPhotos(contact, new File(tempPhotoFile));
             // TODO delete temp files in case of error?
         }
 
-        public void sendPhotos(Uri[] photoUris) {
+        public void sendPhotos(AndroidUser contact, Uri[] photoUris) {
             // XXX This is in the UI thread! You do not touch the FS in the UI thread
             File[] photos = new File[photoUris.length];
             for (int i = 0; i < photos.length; i++) {
@@ -206,6 +206,7 @@ public final class MessageService extends Service implements SessionListener {
                         throw new IOException("null fd for photo " + i);
                     }
                     FileChannel src = new FileInputStream(fd.getFileDescriptor()).getChannel();
+                    // TODO clean these up on error
                     photos[i] = File.createTempFile("photo", ".jpg", App.context.getFilesDir());
                     FileChannel dst = new FileOutputStream(photos[i]).getChannel();
                     long position = 0;
@@ -225,7 +226,7 @@ public final class MessageService extends Service implements SessionListener {
                     Log.e(TAG, "failed to copy file", e);
                 }
             }
-            session.sendPhotos(photos);
+            session.sendPhotos(contact, photos);
         }
 
         public Message getMessage(int id) {

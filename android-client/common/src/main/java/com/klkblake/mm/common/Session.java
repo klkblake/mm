@@ -156,7 +156,6 @@ public class Session implements Runnable {
         dataRecvBuf.clear();
         byte[] pubkey = Crypto.getPublicKey();
         int subuser = 0;
-        byte[] peerpubkey = new byte[32]; // TODO actually specify a peer.
         crypto = new Crypto();
         controlClientCounter = 0;
         dataClientCounter = 0;
@@ -326,13 +325,13 @@ public class Session implements Runnable {
                                     // TODO: BIGTEXT
                                     ASSERT(encoded.length <= MAX_SHORT_TEXT, "Message too long");
                                     controlSendBuf.put(MTYPE_TEXT_MESSAGE_CLIENT);
-                                    controlSendBuf.put(peerpubkey);
+                                    controlSendBuf.put(message.peer.pubkey);
                                     controlSendBuf.put((byte)subuser);
                                     controlSendBuf.put(encoded);
                                 } else if (message.type == Message.TYPE_PHOTOS) {
                                     ASSERT(message.photos.length <= MAX_PARTS, "Too many photos");
                                     controlSendBuf.put(MTYPE_PART_MESSAGE_CLIENT);
-                                    controlSendBuf.put(peerpubkey);
+                                    controlSendBuf.put(message.peer.pubkey);
                                     controlSendBuf.put((byte)subuser);
                                     controlSendBuf.put(PTYPE_PHOTOS);
                                     for (int i = 0; i < message.photos.length; i++) {
@@ -378,8 +377,6 @@ public class Session implements Runnable {
                                 int sizeToSend = (int) min(remaining, MAX_CHUNK_SIZE);
                                 dataSendBuf.clear();
                                 int length = sizeToSend - DATA_MIN_LENGTH;
-                                // We either (a) will do the MAC, or (b) are sending DataClientHello,
-                                // which is known to exceed CONTROL_MIN_LENGTH.
                                 ASSERT(length >= 0 && length <= Short.MAX_VALUE, "message length outside bounds");
                                 dataSendBuf.putShort((short) length);
                                 dataSendBuf.putLong(data.messageID);
@@ -393,7 +390,6 @@ public class Session implements Runnable {
                                 } catch (IOException e) {
                                     throw new Failure.FilesystemFailure(e);
                                 }
-                                // XXX only do for encrypted messages
                                 dataSendBuf.position(LENGTH_SIZE);
                                 crypto.encrypt(dataSendBuf, ~(dataClientCounter++ * 2));
                                 dataSendBuf.rewind();
@@ -468,12 +464,12 @@ public class Session implements Runnable {
         }
     }
 
-    public void sendMessage(String message) {
-        enqueueMessage(new SendingMessage(message));
+    public void sendMessage(User peer, String message) {
+        enqueueMessage(new SendingMessage(peer, message));
     }
 
-    public void sendPhotos(File... photos) {
-        enqueueMessage(new SendingMessage(photos));
+    public void sendPhotos(User peer, File... photos) {
+        enqueueMessage(new SendingMessage(peer, photos));
     }
 
     public void close() {
