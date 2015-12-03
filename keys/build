@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+for dir in *; do
+	if [[ -d "$dir" ]]; then
+		rm -f "$dir/contacts.bin"
+		while read -r line; do
+			cat < "$line/key.pub" >> "$dir/contacts.bin"
+		done < "$dir/contacts"
+		resources="../android-client/app/src/$dir/resources"
+		mkdir -p "$resources"
+		rm -f "$resources/*"
+		cp "server.pub" "$resources/"
+		cp "$dir/key.pub" "$resources/"
+		cp "$dir/key.sec" "$resources/"
+		cp "$dir/contacts.bin" "$resources/"
+	fi
+done

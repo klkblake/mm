@@ -1,0 +1,6 @@
+/server.pub
+/server.sec
+/*/
+!/user1/
+!/user2/
+/*/contacts.bin

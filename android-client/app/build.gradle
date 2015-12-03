@@ -29,6 +29,12 @@ model {
         ldLibs += 'sodium'
         abiFilters += ['armeabi-v7a', 'x86']
     }
+
+    android.productFlavors {
+        file('../../keys').listFiles().findAll { it.isDirectory() }.each({
+            create(it.name)
+        })
+    }
 }
 
 dependencies {
@@ -38,3 +44,10 @@ dependencies {
     compile 'com.android.support:appcompat-v7:23.1.0'
     compile project(':common')
 }
+
+task buildContactLists(type: Exec) {
+    commandLine './build'
+    workingDir '../../keys'
+}
+
+tasks.getByPath(":app:preBuild").dependsOn.add(buildContactLists)
