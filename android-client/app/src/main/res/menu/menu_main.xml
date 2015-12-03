@@ -1,7 +1,15 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    tools:context=".ChatActivity">
-    <item android:id="@+id/action_settings" android:title="@string/action_settings"
-        android:orderInCategory="100" app:showAsAction="never" />
+    tools:context=".MainActivity">
+    <item
+        android:id="@+id/action_add_contact"
+        android:icon="@drawable/ic_person_add_24dp"
+        app:showAsAction="ifRoom"
+        android:title="@string/action_add_contact" />
+    <item
+        android:id="@+id/action_settings"
+        android:icon="@drawable/ic_settings_24dp"
+        app:showAsAction="ifRoom"
+        android:title="@string/action_settings" />
 </menu>
