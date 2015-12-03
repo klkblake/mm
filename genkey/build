@@ -1,8 +1,6 @@
 #!/bin/bash
 DEBUG=no
 
-CFLAGS="-Wall -Weverything -Wno-vla -Wno-padded -Wno-reserved-id-macro -Wno-missing-prototypes -Wno-unused-function -Wno-unused-macros -Wno-unused-variable -Wno-newline-eof $CFLAGS"
-
 CC=${CC:-clang}
 
 if [[ "$1" == debug ]]; then
@@ -24,8 +22,12 @@ if [[ DEBUG == no ]]; then
 	CFLAGS="-O3 $CFLAGS"
 fi
 
+CFLAGS="-I../libsodium/libsodium-linux/include -L../libsodium/libsodium-linux/lib -static ${CFLAGS}"
+
+CFLAGS="-Wall -Weverything -Wno-vla -Wno-padded -Wno-reserved-id-macro -Wno-missing-prototypes -Wno-unused-function -Wno-unused-macros -Wno-unused-variable -Wno-newline-eof $CFLAGS"
+
 CFLAGS="-std=gnu11 -x c $CFLAGS"
 
 set -e
 
-$CC $CFLAGS -pthreads -o mm src/main.c
+$CC $CFLAGS -o genkey src/main.c -lsodium
