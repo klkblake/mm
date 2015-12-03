@@ -65,6 +65,27 @@ public class ChatActivity extends AppActivity {
         sendButton = (FloatingActionButton) findViewById(R.id.sendButton);
 
         contact = getIntent().getParcelableExtra(EXTRA_CONTACT);
+        switch (contact.subusers.size()) {
+            case 1:
+                setTitle(contact.subusers.get(0).getName());
+                break;
+            case 2:
+                String name1 = contact.subusers.get(0).getName();
+                String name2 = contact.subusers.get(1).getName();
+                setTitle(name1 + " and " + name2);
+                break;
+            case 3:
+                name1 = contact.subusers.get(0).getName();
+                name2 = contact.subusers.get(1).getName();
+                String name3 = contact.subusers.get(2).getName();
+                setTitle(name1 + ", " + name2 + ", and " + name3);
+                break;
+            default:
+                name1 = contact.subusers.get(0).getName();
+                name2 = contact.subusers.get(1).getName();
+                name3 = contact.subusers.get(2).getName();
+                setTitle(name1 + ", " + name2 + ", " + name3 + ", and co.");
+        }
         messages = new MessageListAdapter();
         messageList.setAdapter(messages);
         composeText.addTextChangedListener(new TextWatcher() {
