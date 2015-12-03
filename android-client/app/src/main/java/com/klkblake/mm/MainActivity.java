@@ -11,40 +11,53 @@ import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
 
+import com.klkblake.mm.common.Resources;
+
 import java.util.ArrayList;
+import java.util.Arrays;
 
 import static com.klkblake.mm.common.Util.isDark;
 
 public class MainActivity extends AppActivity {
-    private final AndroidUser[] contacts = new AndroidUser[]{
-            new AndroidUser("Test User", 0xffffcccc, new byte[32], 0, null),
-            new AndroidUser("Test User", 0xffe2b449, new byte[32], 0, null),
-            new AndroidUser("Test User", 0xffe1b27a, new byte[32], 0, null),
-            new AndroidUser("Test User", 0xffffffff, new byte[32], 0, null),
-            new AndroidUser("Test User 1.1", 0xffffccff, new byte[32], 0, null),
-            new AndroidUser("Test User2", 0xffcc0033, new byte[32], 0, null),
-    };
+    private final ArrayList<AndroidUser> contacts = new ArrayList<>();
 
     {
-        contacts[3].addSubUser("Test User", 0xfffafafa, new byte[32], 0, null);
-        contacts[3].addSubUser("Test User", 0xffe2b449, new byte[32], 0, null);
-        contacts[3].addSubUser("Test User", 0xffe2b448, new byte[32], 0, null);
-        contacts[3].addSubUser("Test User", 0xff303030, new byte[32], 0, null);
-        contacts[3].addSubUser("Test User", 0xff000000, new byte[32], 0, null);
-        contacts[4].addSubUser("Test User 1.2", 0xff4400cc, new byte[32], 0, null);
+        contacts.add(new AndroidUser("Test User", 0xffffcccc, new byte[32], 0, null));
+        contacts.add(new AndroidUser("Test User", 0xffe2b449, new byte[32], 0, null));
+        contacts.add(new AndroidUser("Test User", 0xffe1b27a, new byte[32], 0, null));
+        AndroidUser user1 = new AndroidUser("Test User", 0xffffffff, new byte[32], 0, null);
+        user1.addSubUser("Test User", 0xfffafafa, new byte[32], 0, null);
+        user1.addSubUser("Test User", 0xffe2b449, new byte[32], 0, null);
+        user1.addSubUser("Test User", 0xffe2b448, new byte[32], 0, null);
+        user1.addSubUser("Test User", 0xff303030, new byte[32], 0, null);
+        user1.addSubUser("Test User", 0xff000000, new byte[32], 0, null);
+        contacts.add(user1);
+        AndroidUser user2 = new AndroidUser("Test User 1.1", 0xffffccff, new byte[32], 0, null);
+        user2.addSubUser("Test User 1.2", 0xff4400cc, new byte[32], 0, null);
+        contacts.add(user2);
+        contacts.add(new AndroidUser("Test User2", 0xffcc0033, new byte[32], 0, null));
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        nextEmbeddedContact:
+        for (byte[] key : Resources.EMBEDDED_CONTACTS) {
+            for (AndroidUser contact : contacts) {
+                if (Arrays.equals(contact.pubkey, key)) {
+                    continue nextEmbeddedContact;
+                }
+            }
+            contacts.add(new AndroidUser(key));
+        }
         ListView contactsList = (ListView) findViewById(R.id.contactsList);
         contactsList.setAdapter(new ContactListAdapter());
         contactsList.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
                 Intent intent = new Intent(App.context, ChatActivity.class);
-                intent.putExtra(ChatActivity.EXTRA_CONTACT, contacts[position]);
+                intent.putExtra(ChatActivity.EXTRA_CONTACT, contacts.get(position));
                 App.startActivity(intent);
             }
         });
@@ -57,7 +70,7 @@ public class MainActivity extends AppActivity {
 
         @Override
         public int getCount() {
-            return contacts.length;
+            return contacts.size();
         }
 
         @Override
@@ -77,7 +90,7 @@ public class MainActivity extends AppActivity {
 
         @Override
         public int getItemViewType(int position) {
-            ArrayList<AndroidUser.SubUser> subusers = contacts[position].subusers;
+            ArrayList<AndroidUser.SubUser> subusers = contacts.get(position).subusers;
             if (subusers.size() > 1) {
                 return 2;
             }
@@ -103,7 +116,7 @@ public class MainActivity extends AppActivity {
 
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
-            AndroidUser contact = contacts[position];
+            AndroidUser contact = contacts.get(position);
             int type = getItemViewType(position);
             if (type == 0 || type == 1) {
                 TextView view;

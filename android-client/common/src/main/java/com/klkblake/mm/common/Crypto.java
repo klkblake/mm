@@ -1,7 +1,5 @@
 package com.klkblake.mm.common;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 
@@ -10,19 +8,16 @@ import java.nio.ByteBuffer;
  */
 public final class Crypto {
     public static final int MACBYTES;
-    private static final int PUBLICKEYBYTES;
-    private static final int SECRETKEYBYTES;
+    public static final int KEYBYTES;
 
     static {
         System.loadLibrary("mm-crypto");
         MACBYTES = getMACBYTES();
-        PUBLICKEYBYTES = getPUBLICKEYBYTES();
-        SECRETKEYBYTES = getSECRETKEYBYTES();
+        KEYBYTES = getKEYBYTES();
     }
 
     private static native int getMACBYTES();
-    private static native int getPUBLICKEYBYTES();
-    private static native int getSECRETKEYBYTES();
+    private static native int getKEYBYTES();
 
     @SuppressWarnings("unused")
     private final long ptr;
@@ -34,15 +29,11 @@ public final class Crypto {
     private static native boolean decrypt(long ptr, ByteBuffer buf, int position, int limit, long counter);
     private static native void destroy(long ptr);
 
-    public Crypto() {
-        byte[] pubkey = getPublicKey();
-        byte[] seckey = getKey("key.sec", SECRETKEYBYTES);
-        // XXX This is wrong! We want the *server's* public key here
-        ptr = create(pubkey, seckey);
-    }
-
-    public static byte[] getPublicKey() {
-        return getKey("key.pub", PUBLICKEYBYTES);
+    public Crypto(byte[] serverkey, byte[] seckey) {
+        if (serverkey.length != KEYBYTES || seckey.length != KEYBYTES) {
+            throw new IllegalArgumentException("Incorrect key size");
+        }
+        ptr = create(serverkey, seckey);
     }
 
     public long getNonce1() {
@@ -72,30 +63,4 @@ public final class Crypto {
         destroy(ptr);
     }
 
-    private static byte[] getKey(String file, int size) {
-        InputStream in = Crypto.class.getClassLoader().getResourceAsStream(file);
-        if (in == null) {
-            throw new RuntimeException("Can't locate key file");
-        }
-        byte[] key = new byte[size];
-        int read = 0;
-        while (true) {
-            int res;
-            try {
-                res = in.read(key, read, key.length - read);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            if (res == -1) {
-                if (read != key.length) {
-                    throw new RuntimeException("Invalid key file!");
-                } else {
-                    break;
-                }
-            } else {
-                read += res;
-            }
-        }
-        return key;
-    }
 }

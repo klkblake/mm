@@ -154,9 +154,8 @@ public class Session implements Runnable {
         dataSendBuf.limit(0);
         controlRecvBuf.clear();
         dataRecvBuf.clear();
-        byte[] pubkey = Crypto.getPublicKey();
         int subuser = 0;
-        crypto = new Crypto();
+        crypto = new Crypto(Resources.SERVER_KEY, Resources.SECRET_KEY);
         controlClientCounter = 0;
         dataClientCounter = 0;
         controlServerCounter = 0;
@@ -313,7 +312,7 @@ public class Session implements Runnable {
                             newControlMessage();
                             controlSendBuf.putShort(PROTOCOL_VERSION);
                             controlSendBuf.putLong(crypto.getNonce1());
-                            controlSendBuf.put(pubkey);
+                            controlSendBuf.put(Resources.PUBLIC_KEY);
                             sendControlMessage(false);
                         } else if (state == STATE_READY) {
                             while (!messagesToSend.isEmpty() && !controlSendBuf.hasRemaining()) {

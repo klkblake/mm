@@ -10,6 +10,10 @@ import com.klkblake.mm.common.User;
  * Created by kyle on 28/11/15.
  */
 public class AndroidUser extends User<Bitmap> implements Parcelable {
+    public AndroidUser(byte[] pubkey) {
+        super(pubkey);
+    }
+
     public AndroidUser(String name, int color, byte[] avatarSHA256, int avatarSize, Bitmap avatar) {
         super(name, color, avatarSHA256, avatarSize, avatar);
     }
@@ -26,6 +30,9 @@ public class AndroidUser extends User<Bitmap> implements Parcelable {
             int avatarSize = in.readInt();
             Bitmap avatar = in.readParcelable(Bitmap.class.getClassLoader());
             addSubUser(name, color, avatarSHA256, avatarSize, avatar);
+        }
+        if (count > 1) {
+            subusers.trimToSize();
         }
     }
 

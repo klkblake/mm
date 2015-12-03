@@ -19,13 +19,9 @@ Java_com_klkblake_mm_common_Crypto_getMACBYTES(JNIEnv *env, jclass type) {
 }
 
 JNIEXPORT jint JNICALL
-Java_com_klkblake_mm_common_Crypto_getPUBLICKEYBYTES(JNIEnv *env, jclass type) {
+Java_com_klkblake_mm_common_Crypto_getKEYBYTES(JNIEnv *env, jclass type) {
+    _Static_assert(crypto_box_PUBLICKEYBYTES == crypto_box_SECRETKEYBYTES, "Key sizes don't match");
     return crypto_box_PUBLICKEYBYTES;
-}
-
-JNIEXPORT jint JNICALL
-Java_com_klkblake_mm_common_Crypto_getSECRETKEYBYTES(JNIEnv *env, jclass type) {
-    return crypto_box_SECRETKEYBYTES;
 }
 
 JNIEXPORT jlong JNICALL
