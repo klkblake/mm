@@ -7,6 +7,7 @@ import java.util.Random;
  * Created by kyle on 30/11/15.
  */
 public class User<T> {
+    public static final int MAX_SUBUSERS = 256;
     public final byte[] pubkey;
     public final ArrayList<SubUser> subusers = new ArrayList<>(1);
 
@@ -21,35 +22,21 @@ public class User<T> {
 
     public User(byte[] pubkey) {
         this.pubkey = pubkey;
-        StringBuilder sb = new StringBuilder(pubkey.length * 2 + 2);
-        sb.append('<');
-        for (byte b : pubkey) {
-            int top = b >> 4 & 0xf;
-            int bottom = b & 0xf;
-            if (bottom > 9) {
-                sb.append((char)('a' + bottom - 10));
-            } else {
-                sb.append((char)('0' + bottom));
-            }
-            if (top > 9) {
-                sb.append((char)('a' + top - 10));
-            } else {
-                sb.append((char)('0' + top));
-            }
-        }
-        sb.append('>');
         Random rng = new Random();
         int color = rng.nextInt(0xffffff) | 0xff000000;
-        addSubUser(sb.toString(), color, new byte[32], 0, null);
+        addSubUser("<user not yet loaded>", color, new byte[32], 0, null);
     }
 
     public void addSubUser(String name, int color, byte[] avatarSHA256, int avatarSize, T avatar) {
+        if (subusers.size() == MAX_SUBUSERS) {
+            throw new IllegalStateException("Subuser limit hit");
+        }
         subusers.add(new SubUser(name, color, avatarSHA256, avatarSize, avatar));
     }
 
     public class SubUser {
         protected String name;
-        protected int color;
+        protected int color; // TODO should this include the alpha channel?
         protected byte[] avatarSHA256;
         protected int avatarSize;
         protected T avatar;

@@ -26,12 +26,14 @@ public class App {
     public static Resources resources;
     public static PackageManager packageManager;
     public static ContentResolver contentResolver;
+    public static float density;
 
     public static void onActivityCreate(Activity activity) {
         context = activity.getApplicationContext();
         resources = context.getResources();
         packageManager = context.getPackageManager();
         contentResolver = context.getContentResolver();
+        density = resources.getDisplayMetrics().density;
     }
 
     public static void onActivityResume(Activity activity) {
