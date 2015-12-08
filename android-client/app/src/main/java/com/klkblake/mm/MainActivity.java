@@ -1,26 +1,25 @@
 package com.klkblake.mm;
 
 import android.content.Intent;
+import android.content.res.TypedArray;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
-import android.graphics.drawable.RippleDrawable;
 import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.RecyclerView.ViewHolder;
 import android.text.StaticLayout;
 import android.text.TextPaint;
-import android.text.TextUtils;
-import android.util.Log;
 import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.RelativeLayout;
 import android.widget.TextView;
 
 import com.klkblake.mm.common.Resources;
@@ -28,15 +27,18 @@ import com.klkblake.mm.common.Resources;
 import java.util.ArrayList;
 import java.util.Arrays;
 
+import static com.klkblake.mm.common.Util.min;
+
 public class MainActivity extends AppActivity {
+    private static final int CONTACT_CHUNK_SIZE = 16;
     private final ArrayList<AndroidUser> contacts = new ArrayList<>();
     private RecyclerView contactsList;
-    private Drawable defaultAvatar;
-    private Drawable circle;
+    private Bitmap defaultAvatar;
     private Drawable selectableItemBackground;
     private TextPaint textPaint;
-    private int textColorPrimary;
     private String namePairFormat;
+    private TextPaint textPaintSmallName = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+    private TextPaint textPaintRecentMessage;
 
     {
         contacts.add(new AndroidUser("Test User", 0xffffcccc, new byte[32], 0, null));
@@ -69,8 +71,6 @@ public class MainActivity extends AppActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        defaultAvatar = getDrawable(R.drawable.ic_person_40dp);
-        circle = getDrawable(R.drawable.circle);
         TypedValue background = new TypedValue();
         getTheme().resolveAttribute(R.attr.selectableItemBackground, background, true);
         selectableItemBackground = getDrawable(background.resourceId);
@@ -79,10 +79,32 @@ public class MainActivity extends AppActivity {
         TextView v = new TextView(this);
         v.setTextAppearance(this, appearance.resourceId);
         textPaint = v.getPaint();
-        TypedValue color = new TypedValue();
-        getTheme().resolveAttribute(android.R.attr.textColorPrimary, color, true);
-        textColorPrimary = getResources().getColor(color.resourceId);
         namePairFormat = getString(R.string.name_pair_format);
+
+        int[] attrs = new int[] {
+                android.R.attr.textSize,
+                android.R.attr.textColor,
+                android.R.attr.fontFamily,
+                android.R.attr.textStyle,
+        };
+        getTheme().resolveAttribute(android.R.attr.textAppearanceListItemSecondary, appearance, true);
+        TypedArray ta = obtainStyledAttributes(appearance.resourceId, attrs);
+        textPaintSmallName.setTextSize(ta.getDimensionPixelSize(0, -1));
+        textPaintSmallName.setColor(ta.getColor(1, -1));
+        Typeface tf = Typeface.create(ta.getString(2), ta.getInt(3, -1));
+        textPaintSmallName.setTypeface(tf);
+        ta.recycle();
+
+        textPaintRecentMessage = new TextPaint(textPaintSmallName);
+        getTheme().resolveAttribute(android.R.attr.textColorSecondary, appearance, true);
+        textPaintRecentMessage.setColor(getResources().getColor(appearance.resourceId));
+
+        Drawable defaultAvatarVector = getDrawable(R.drawable.ic_person_40dp);
+        assert defaultAvatarVector != null;
+        defaultAvatar = Bitmap.createBitmap(defaultAvatarVector.getIntrinsicWidth(), defaultAvatarVector.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(defaultAvatar);
+        defaultAvatarVector.setBounds(0, 0, defaultAvatar.getWidth(), defaultAvatar.getHeight());
+        defaultAvatarVector.draw(c);
 
         nextEmbeddedContact:
         for (byte[] key : Resources.EMBEDDED_CONTACTS) {
@@ -123,36 +145,56 @@ public class MainActivity extends AppActivity {
         if (subuser.hasAvatar()) {
             avatar.setImageBitmap(subuser.getAvatar());
         } else {
-            avatar.setImageDrawable(defaultAvatar);
+            avatar.setImageBitmap(defaultAvatar);
         }
     }
 
     private class ContactListAdapter extends RecyclerView.Adapter<ContactViewHolder> {
         @Override
         public ContactViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-            int layout;
+            int layout = 0;
             if (viewType == 0) {
                 layout = R.layout.item_contact_two;
             } else if (viewType == 1) {
                 layout = R.layout.item_contact;
-            } else {
-                layout = R.layout.item_contact_multiple;
             }
-            ViewGroup view = (ViewGroup) LayoutInflater.from(MainActivity.this).inflate(layout, parent, false);
+            View view;
+            if (layout != 0) {
+                view = LayoutInflater.from(MainActivity.this).inflate(layout, parent, false);
+            } else {
+                view = new MultipleContactView(MainActivity.this, viewType, textPaintSmallName, textPaintRecentMessage, defaultAvatar);
+            }
             view.setBackground(selectableItemBackground.getConstantState().newDrawable(getResources(), getTheme()));
             if (viewType == 0) {
-                return new TwoContactViewHolder(view);
+                return new TwoContactViewHolder((ViewGroup) view);
             } else if (viewType == 1) {
-                return new SingleContactViewHolder(view);
+                return new SingleContactViewHolder((ViewGroup) view);
             } else {
-                return new MultiContactViewHolder(view, viewType);
+                return new MultiContactViewHolder((MultipleContactView) view);
             }
+        }
+
+        private int getItem(int position) {
+            for (int i = 0; i < contacts.size(); i++) {
+                AndroidUser contact = contacts.get(i);
+                int chunks = (contact.subusers.size() - 1) / CONTACT_CHUNK_SIZE + 1;
+                if (position >= chunks) {
+                    position -= chunks;
+                } else {
+                    return i << 8 | position;
+                }
+            }
+            throw new IndexOutOfBoundsException();
         }
 
         @Override
         public void onBindViewHolder(final ContactViewHolder holder, int position) {
-            final AndroidUser contact = contacts.get(position);
-            holder.bind(contact.subusers);
+            int packed = getItem(position);
+            final AndroidUser contact = contacts.get(packed >> 8);
+            int chunk = packed & 0xff;
+            int offset = chunk * CONTACT_CHUNK_SIZE;
+            boolean isLast = offset + CONTACT_CHUNK_SIZE > contact.subusers.size();
+            holder.bind(contact.subusers, offset, isLast);
             holder.itemView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
@@ -165,13 +207,16 @@ public class MainActivity extends AppActivity {
 
         @Override
         public int getItemViewType(int position) {
-            ArrayList<AndroidUser.SubUser> subusers = contacts.get(position).subusers;
-            int count = subusers.size();
+            int packed = getItem(position);
+            ArrayList<AndroidUser.SubUser> subusers = contacts.get(packed >> 8).subusers;
+            int chunk = packed & 0xff;
+            int offset = chunk * CONTACT_CHUNK_SIZE;
+            int count = min(subusers.size() - offset, CONTACT_CHUNK_SIZE);
             if (count != 2) {
                 return count;
             }
-            String name1 = subusers.get(0).getName();
-            String name2 = subusers.get(1).getName();
+            String name1 = subusers.get(offset).getName();
+            String name2 = subusers.get(offset + 1).getName();
             float width = StaticLayout.getDesiredWidth(name1 + " and " + name2, textPaint);
             float startMargin = 114 * App.density;
             float endMargin = 98 * App.density;
@@ -184,16 +229,20 @@ public class MainActivity extends AppActivity {
 
         @Override
         public int getItemCount() {
-            return contacts.size();
+            int total = 0;
+            for (AndroidUser contact : contacts) {
+                total += (contact.subusers.size() - 1) / CONTACT_CHUNK_SIZE + 1;
+            }
+            return total;
         }
     }
 
     private abstract class ContactViewHolder extends ViewHolder {
-        public ContactViewHolder(ViewGroup view) {
+        public ContactViewHolder(View view) {
             super(view);
         }
 
-        public abstract void bind(ArrayList<AndroidUser.SubUser> subusers);
+        public abstract void bind(ArrayList<AndroidUser.SubUser> subusers, int offset, boolean isLast);
     }
 
     private class SingleContactViewHolder extends ContactViewHolder {
@@ -210,7 +259,7 @@ public class MainActivity extends AppActivity {
             messageText = (TextView) view.findViewById(R.id.messageText);
         }
 
-        public void bind(ArrayList<AndroidUser.SubUser> subusers) {
+        public void bind(ArrayList<AndroidUser.SubUser> subusers, int offset, boolean isLast) {
             AndroidUser.SubUser subuser = subusers.get(0);
             setAvatarIfPresent(avatar, subuser);
             displayName.setText(subuser.getName());
@@ -236,7 +285,7 @@ public class MainActivity extends AppActivity {
             messageText = (TextView) view.findViewById(R.id.messageText);
         }
 
-        public void bind(ArrayList<AndroidUser.SubUser> subusers) {
+        public void bind(ArrayList<AndroidUser.SubUser> subusers, int offset, boolean isLast) {
             AndroidUser.SubUser subuser1 = subusers.get(0);
             AndroidUser.SubUser subuser2 = subusers.get(1);
             setAvatarIfPresent(avatar1, subuser1);
@@ -248,150 +297,23 @@ public class MainActivity extends AppActivity {
     }
 
     private class MultiContactViewHolder extends ContactViewHolder {
-        private ImageView[] avatars;
-        private TextView[] displayNames;
-        private ImageView[] colorCircles;
-        private TextView messageText;
-
-        public MultiContactViewHolder(ViewGroup view, int count) {
+        public MultiContactViewHolder(MultipleContactView view) {
             super(view);
-            avatars = new ImageView[count];
-            displayNames = new TextView[count];
-            colorCircles = new ImageView[count];
-            int rowCount = count >> 1;
-            boolean odd = false;
-            if ((count & 1) == 1) {
-                rowCount++;
-                odd = true;
-            }
-            messageText = (TextView) view.findViewById(R.id.messageText);
-            view.removeView(messageText);
-            int dp40 = (int) (40 * App.density);
-            for (int i = 0, j = 0; i < rowCount; i++) {
-                // This is expanded for performance. See item_contact_row.xml for the original.
-                RelativeLayout row = new RelativeLayout(MainActivity.this);
-                LinearLayout.LayoutParams llParams = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (42 * App.density));
-                row.setLayoutParams(llParams);
-
-                RelativeLayout.LayoutParams params;
-
-                {
-                    ImageView avatar1 = new ImageView(MainActivity.this);
-                    params = new RelativeLayout.LayoutParams(dp40, dp40);
-                    params.addRule(RelativeLayout.ALIGN_PARENT_START);
-                    params.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-                    params.setMarginStart((int) (16 * App.density));
-                    avatar1.setLayoutParams(params);
-                    avatar1.setId(R.id.avatar1);
-                    // XXX should we set a drawable for it here? Probably not...
-                    row.addView(avatar1);
-                    avatars[j] = avatar1;
-                }
-
-                {
-                    ImageView avatar2 = new ImageView(MainActivity.this);
-                    params = new RelativeLayout.LayoutParams(dp40, dp40);
-                    params.addRule(RelativeLayout.END_OF, R.id.avatar1);
-                    params.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-                    params.setMarginStart((int) (2 * App.density));
-                    avatar2.setLayoutParams(params);
-                    avatar2.setId(R.id.avatar2);
-                    row.addView(avatar2);
-                    if (j + 1 == count) {
-                        avatar2.setVisibility(View.INVISIBLE);
-                    } else {
-                        avatars[j + 1] = avatar2;
-                    }
-                }
-
-                {
-                    ImageView circle2 = new ImageView(MainActivity.this);
-                    params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                    params.addRule(RelativeLayout.ALIGN_PARENT_END);
-                    params.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-                    params.topMargin = (int) (8 * App.density);
-                    params.setMarginEnd((int) (16 * App.density));
-                    circle2.setLayoutParams(params);
-                    circle2.setId(R.id.colorCircle2);
-                    circle2.setImageDrawable(circle.getConstantState().newDrawable(getResources(), getTheme()));
-                    row.addView(circle2);
-                    if (j + 1 == count) {
-                        circle2.setVisibility(View.INVISIBLE);
-                    } else {
-                        colorCircles[j + 1] = circle2;
-                    }
-                }
-
-                {
-                    ImageView circle1 = new ImageView(MainActivity.this);
-                    params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                    params.addRule(RelativeLayout.START_OF, R.id.colorCircle2);
-                    params.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-                    params.topMargin = (int) (8 * App.density);
-                    params.setMarginEnd((int) (18 * App.density));
-                    circle1.setLayoutParams(params);
-                    circle1.setId(R.id.colorCircle1);
-                    circle1.setImageDrawable(circle.getConstantState().newDrawable(getResources(), getTheme()));
-                    row.addView(circle1);
-                    colorCircles[j] = circle1;
-                }
-
-                {
-                    TextView displayName1 = new TextView(MainActivity.this);
-                    params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                    params.addRule(RelativeLayout.END_OF, R.id.avatar2);
-                    params.addRule(RelativeLayout.START_OF, R.id.colorCircle1);
-                    params.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-                    params.setMarginStart((int) (16 * App.density));
-                    params.setMarginEnd((int) (16 * App.density));
-                    displayName1.setLayoutParams(params);
-                    // We only set the diff between the target style and the default
-                    displayName1.setTextColor(textColorPrimary);
-                    displayName1.setMaxLines(1);
-                    displayName1.setEllipsize(TextUtils.TruncateAt.END);
-                    row.addView(displayName1);
-                    displayNames[j] = displayName1;
-                }
-
-                {
-                    TextView displayName2 = new TextView(MainActivity.this);
-                    params = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                    params.addRule(RelativeLayout.END_OF, R.id.avatar2);
-                    params.addRule(RelativeLayout.START_OF, R.id.colorCircle1);
-                    params.addRule(RelativeLayout.ALIGN_PARENT_TOP);
-                    params.topMargin = (int) (21 * App.density);
-                    params.setMarginStart((int) (16 * App.density));
-                    params.setMarginEnd((int) (16 * App.density));
-                    displayName2.setLayoutParams(params);
-                    // We only set the diff between the target style and the default
-                    displayName2.setTextColor(textColorPrimary);
-                    displayName2.setMaxLines(1);
-                    displayName2.setEllipsize(TextUtils.TruncateAt.END);
-                    row.addView(displayName2);
-                    if (j + 1 == count) {
-                        // TODO don't build a view we won't even show
-                        displayName2.setVisibility(View.GONE);
-                        messageText.setLayoutParams(displayName2.getLayoutParams());
-                        row.addView(messageText);
-                    } else {
-                        displayNames[j + 1] = displayName2;
-                    }
-                }
-
-                view.addView(row);
-                j += 2;
-            }
-            if (!odd) {
-                view.addView(messageText);
-            }
         }
 
-        public void bind(ArrayList<AndroidUser.SubUser> subusers) {
-            for (int i = 0; i < subusers.size(); i++) {
-                AndroidUser.SubUser subuser = subusers.get(i);
-                setAvatarIfPresent(avatars[i], subuser);
-                displayNames[i].setText(subuser.getName());
-                colorCircles[i].setColorFilter(subuser.getColor());
+        public void bind(ArrayList<AndroidUser.SubUser> subusers, int offset, boolean isLast) {
+            MultipleContactView view = (MultipleContactView) itemView;
+            view.setSubusers(subusers, offset, isLast);
+            int dp16 = (int) (16 * App.density);
+            int dp18 = (int) (18 * App.density);
+            if (offset == 0 && isLast) {
+                view.setPadding(dp16, dp16, dp16, dp18);
+            } else if (offset == 0) {
+                view.setPadding(dp16, dp16, dp16, 0);
+            } else if (isLast) {
+                view.setPadding(dp16, 0, dp16, dp18);
+            } else {
+                view.setPadding(dp16, 0, dp16, 0);
             }
         }
     }
