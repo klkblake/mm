@@ -13,13 +13,10 @@ import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.RecyclerView.ViewHolder;
 import android.text.TextPaint;
 import android.util.TypedValue;
-import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ImageView;
-import android.widget.TextView;
 
 import com.klkblake.mm.common.Resources;
 
@@ -141,31 +138,14 @@ public class MainActivity extends AppActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    private void setAvatarIfPresent(ImageView avatar, AndroidUser.SubUser subuser) {
-        if (subuser.hasAvatar()) {
-            avatar.setImageBitmap(subuser.getAvatar());
-        } else {
-            avatar.setImageBitmap(defaultAvatar);
-        }
-    }
-
     private class ContactListAdapter extends RecyclerView.Adapter<ContactViewHolder> {
         @Override
         public ContactViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-            View view;
-            if (viewType == 1) {
-                view = LayoutInflater.from(MainActivity.this).inflate(R.layout.item_contact, parent, false);
-            } else {
-                view = new MultipleContactView(MainActivity.this, viewType, textPaintLargeName, textPaintSmallName, textPaintRecentMessage, defaultAvatar);
-                RecyclerView.LayoutParams params = new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                view.setLayoutParams(params);
-            }
+            ContactView view = new ContactView(MainActivity.this, viewType, textPaintLargeName, textPaintSmallName, textPaintRecentMessage, defaultAvatar);
+            RecyclerView.LayoutParams params = new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            view.setLayoutParams(params);
             view.setBackground(selectableItemBackground.getConstantState().newDrawable(getResources(), getTheme()));
-            if (viewType == 1) {
-                return new SingleContactViewHolder((ViewGroup) view);
-            } else {
-                return new MultiContactViewHolder((MultipleContactView) view);
-            }
+            return new ContactViewHolder(view);
         }
 
         private int getItem(int position) {
@@ -218,43 +198,13 @@ public class MainActivity extends AppActivity {
         }
     }
 
-    private abstract class ContactViewHolder extends ViewHolder {
-        public ContactViewHolder(View view) {
-            super(view);
-        }
-
-        public abstract void bind(ArrayList<AndroidUser.SubUser> subusers, int offset, boolean isLast);
-    }
-
-    private class SingleContactViewHolder extends ContactViewHolder {
-        private ImageView avatar;
-        private TextView displayName;
-        private TextView messageText;
-        private ImageView colorCircle;
-
-        public SingleContactViewHolder(ViewGroup view) {
-            super(view);
-            avatar = (ImageView) view.findViewById(R.id.avatar);
-            displayName = (TextView) view.findViewById(R.id.displayName);
-            colorCircle = (ImageView) view.findViewById(R.id.colorCircle);
-            messageText = (TextView) view.findViewById(R.id.messageText);
-        }
-
-        public void bind(ArrayList<AndroidUser.SubUser> subusers, int offset, boolean isLast) {
-            AndroidUser.SubUser subuser = subusers.get(0);
-            setAvatarIfPresent(avatar, subuser);
-            displayName.setText(subuser.getName());
-            colorCircle.setColorFilter(subuser.getColor());
-        }
-    }
-
-    private class MultiContactViewHolder extends ContactViewHolder {
-        public MultiContactViewHolder(MultipleContactView view) {
+    private class ContactViewHolder extends ViewHolder {
+        public ContactViewHolder(ContactView view) {
             super(view);
         }
 
         public void bind(ArrayList<AndroidUser.SubUser> subusers, int offset, boolean isLast) {
-            MultipleContactView view = (MultipleContactView) itemView;
+            ContactView view = (ContactView) itemView;
             view.setSubusers(subusers, offset, isLast);
             int dp2 = (int) (2 * App.density);
             int dp16 = (int) (16 * App.density);

@@ -9,8 +9,6 @@ import android.text.TextPaint;
 import android.text.TextUtils;
 import android.view.View;
 
-import com.klkblake.mm.common.Util;
-
 import java.util.ArrayList;
 
 import static com.klkblake.mm.common.Util.ceil;
@@ -18,7 +16,7 @@ import static com.klkblake.mm.common.Util.max;
 import static com.klkblake.mm.common.Util.min;
 
 @SuppressLint("ViewConstructor")
-public class MultipleContactView extends View {
+public class ContactView extends View {
     // This block contains the variables accessed during a draw
     private Paint circlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private Paint avatarPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -47,12 +45,14 @@ public class MultipleContactView extends View {
     private boolean isSingle;
     private boolean even;
 
+    private int preTextOne = avatarSize + textMargin;
     private int preText = step + avatarSize + textMargin;
+    private int postTextOne = textMargin + 2 * circleRadius;
     private int postText = textMargin + circleRadius + step + circleRadius;
     private Bitmap defaultAvatar;
     private String[] names;
 
-    public MultipleContactView(Context context, int count, TextPaint textPaintLarge, TextPaint textPaintSmall, TextPaint textPaintRecentMessage, Bitmap defaultAvatar) {
+    public ContactView(Context context, int count, TextPaint textPaintLarge, TextPaint textPaintSmall, TextPaint textPaintRecentMessage, Bitmap defaultAvatar) {
         super(context);
         this.count = count;
         even = (count & 1) == 0;
@@ -98,9 +98,11 @@ public class MultipleContactView extends View {
         int widthSize = MeasureSpec.getSize(widthMeasureSpec);
         int heightSize = MeasureSpec.getSize(heightMeasureSpec);
 
-        String concat = null;
-        if (count == 2) {
-            concat = names[0] + " and " + names[1];
+        String single = null;
+        if (count == 1) {
+            single = names[0];
+        } else if (count == 2) {
+            single = names[0] + " and " + names[1];
         }
 
         int width;
@@ -108,25 +110,35 @@ public class MultipleContactView extends View {
             width = widthSize;
         } else {
             width = 0;
-            if (count == 2) {
-                width = ceil(textPaintLarge.measureText(concat));
+            if (count <= 2) {
+                width = ceil(textPaintLarge.measureText(single));
             } else {
                 for (String name : names) {
                     width = max(width, ceil(textPaintSmall.measureText(name)));
                 }
             }
             width = max(width, ceil(textPaintSmall.measureText(recentMessage)));
-            width += preText + postText + getPaddingLeft() + getPaddingRight();
+            if (count == 1) {
+                width += preTextOne + postTextOne;
+            } else {
+                width += preText + postText;
+            }
+            width += getPaddingLeft() + getPaddingRight();
             width = max(width, getSuggestedMinimumWidth());
             if (widthMode == MeasureSpec.AT_MOST) {
                 width = min(width, widthSize);
             }
         }
-        int textWidth = width - preText - postText - getPaddingLeft() - getPaddingRight();
+        int textWidth = width - getPaddingLeft() - getPaddingRight();
+        if (count == 1) {
+            textWidth -= preTextOne + postTextOne;
+        } else {
+            textWidth -= preText + postText;
+        }
 
-        isSingle = count == 2 && ceil(textPaintLarge.measureText(concat)) <= textWidth;
-        if (isSingle) {
-            ellipsizedNames[0] = concat;
+        isSingle = count == 1 || (count == 2 && ceil(textPaintLarge.measureText(single)) <= textWidth);
+        if (isSingle && count == 2) {
+            ellipsizedNames[0] = single;
         } else {
             for (int i = 0; i < count; i++) {
                 ellipsizedNames[i] = TextUtils.ellipsize(names[i], textPaintSmall, textWidth, TextUtils.TruncateAt.END).toString();
@@ -162,7 +174,6 @@ public class MultipleContactView extends View {
     protected void onDraw(Canvas canvas) {
         // TODO RTL awareness
         int avatar2Left = avatar1Left + step;
-        int avatar2Right = avatar2Left + avatarSize;
         for (int i = 0, j = 0, y0 = top; i < rowCount; i++, y0 += step) {
             canvas.drawBitmap(avatars[j++], avatar1Left, y0, avatarPaint);
             if (i < rowCount - 1 || even) {
@@ -170,24 +181,34 @@ public class MultipleContactView extends View {
             }
         }
 
-        int circle1CenterX = circle2CenterX - step;
         int circleCenterY = top + (avatarSize >> 1);
-        for (int i = 0, j = 0, y = circleCenterY; i < rowCount; i++, y += step) {
-            circlePaint.setColor(colors[j++]);
-            canvas.drawCircle(circle1CenterX, y, circleRadius, circlePaint);
-            if (i < rowCount - 1 || even) {
+        if (isSingle && count == 1) {
+            circlePaint.setColor(colors[0]);
+            canvas.drawCircle(circle2CenterX, circleCenterY, circleRadius, circlePaint);
+        } else {
+            int circle1CenterX = circle2CenterX - step;
+            for (int i = 0, j = 0, y = circleCenterY; i < rowCount; i++, y += step) {
                 circlePaint.setColor(colors[j++]);
-                canvas.drawCircle(circle2CenterX, y, circleRadius, circlePaint);
+                canvas.drawCircle(circle1CenterX, y, circleRadius, circlePaint);
+                if (i < rowCount - 1 || even) {
+                    circlePaint.setColor(colors[j++]);
+                    canvas.drawCircle(circle2CenterX, y, circleRadius, circlePaint);
+                }
             }
         }
 
-        int textLeft = avatar2Right + textMargin;
-        int textStep = step >> 1;
+        int textLeft;
+        if (isSingle && count == 1) {
+            textLeft = avatar1Left + step + textMargin;
+        } else {
+            textLeft = avatar2Left + avatarSize + textMargin;
+        }
         if (isSingle) {
             int y = top - textOffsetLarge;
             canvas.drawText(ellipsizedNames[0], textLeft, y + singleModeNameTop, textPaintLarge);
             canvas.drawText(recentMessage, textLeft, top + singleModeRecentBaseline, textPaintRecentMessage);
         } else {
+            int textStep = step >> 1;
             int y = top - textOffsetSmall;
             for (int i = 0; i < count; i++, y += textStep) {
                 canvas.drawText(ellipsizedNames[i], textLeft, y, textPaintSmall);
