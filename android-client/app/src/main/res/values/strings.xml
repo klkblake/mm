@@ -12,5 +12,4 @@
         <item quantity="one">+ %d more</item>
         <item quantity="other">+ %d more</item>
     </plurals>
-    <string name="name_pair_format">%1$s and %2$s</string>
 </resources>
