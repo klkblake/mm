@@ -2,6 +2,7 @@ package com.klkblake.mm.common;
 
 import java.nio.charset.StandardCharsets;
 
+import static java.lang.Math.ceil;
 import static java.lang.Math.pow;
 
 /**
@@ -57,5 +58,16 @@ public class Util {
 
     public static int ub2i(byte x) {
         return x & 0xff;
+    }
+
+    public static int ceil(float x) {
+        int res = (int) x;
+        if (res == x) {
+            return res;
+        } else if (x >= 0){
+            return res + 1;
+        } else {
+            return res - 1;
+        }
     }
 }

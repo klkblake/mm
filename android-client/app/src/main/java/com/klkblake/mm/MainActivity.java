@@ -11,7 +11,6 @@ import android.os.Bundle;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.RecyclerView.ViewHolder;
-import android.text.StaticLayout;
 import android.text.TextPaint;
 import android.util.TypedValue;
 import android.view.LayoutInflater;
@@ -32,11 +31,9 @@ import static com.klkblake.mm.common.Util.min;
 public class MainActivity extends AppActivity {
     private static final int CONTACT_CHUNK_SIZE = 16;
     private final ArrayList<AndroidUser> contacts = new ArrayList<>();
-    private RecyclerView contactsList;
     private Bitmap defaultAvatar;
     private Drawable selectableItemBackground;
-    private TextPaint textPaint;
-    private String namePairFormat;
+    private TextPaint textPaintLargeName = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private TextPaint textPaintSmallName = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private TextPaint textPaintRecentMessage;
 
@@ -74,12 +71,6 @@ public class MainActivity extends AppActivity {
         TypedValue background = new TypedValue();
         getTheme().resolveAttribute(R.attr.selectableItemBackground, background, true);
         selectableItemBackground = getDrawable(background.resourceId);
-        TypedValue appearance = new TypedValue();
-        getTheme().resolveAttribute(android.R.attr.textAppearanceListItem, appearance, true);
-        TextView v = new TextView(this);
-        v.setTextAppearance(this, appearance.resourceId);
-        textPaint = v.getPaint();
-        namePairFormat = getString(R.string.name_pair_format);
 
         int[] attrs = new int[] {
                 android.R.attr.textSize,
@@ -87,11 +78,20 @@ public class MainActivity extends AppActivity {
                 android.R.attr.fontFamily,
                 android.R.attr.textStyle,
         };
-        getTheme().resolveAttribute(android.R.attr.textAppearanceListItemSecondary, appearance, true);
+        TypedValue appearance = new TypedValue();
+        getTheme().resolveAttribute(android.R.attr.textAppearanceListItem, appearance, true);
         TypedArray ta = obtainStyledAttributes(appearance.resourceId, attrs);
+        textPaintLargeName.setTextSize(ta.getDimensionPixelSize(0, -1));
+        textPaintLargeName.setColor(ta.getColor(1, -1));
+        Typeface tf = Typeface.create(ta.getString(2), ta.getInt(3, -1));
+        textPaintLargeName.setTypeface(tf);
+        ta.recycle();
+
+        getTheme().resolveAttribute(android.R.attr.textAppearanceListItemSecondary, appearance, true);
+        ta = obtainStyledAttributes(appearance.resourceId, attrs);
         textPaintSmallName.setTextSize(ta.getDimensionPixelSize(0, -1));
         textPaintSmallName.setColor(ta.getColor(1, -1));
-        Typeface tf = Typeface.create(ta.getString(2), ta.getInt(3, -1));
+        tf = Typeface.create(ta.getString(2), ta.getInt(3, -1));
         textPaintSmallName.setTypeface(tf);
         ta.recycle();
 
@@ -116,7 +116,7 @@ public class MainActivity extends AppActivity {
             contacts.add(new AndroidUser(key));
         }
 
-        contactsList = (RecyclerView) findViewById(R.id.contactsList);
+        RecyclerView contactsList = (RecyclerView) findViewById(R.id.contactsList);
         contactsList.setHasFixedSize(true);
         contactsList.setLayoutManager(new LinearLayoutManager(this));
         contactsList.setAdapter(new ContactListAdapter());
@@ -152,22 +152,16 @@ public class MainActivity extends AppActivity {
     private class ContactListAdapter extends RecyclerView.Adapter<ContactViewHolder> {
         @Override
         public ContactViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-            int layout = 0;
-            if (viewType == 0) {
-                layout = R.layout.item_contact_two;
-            } else if (viewType == 1) {
-                layout = R.layout.item_contact;
-            }
             View view;
-            if (layout != 0) {
-                view = LayoutInflater.from(MainActivity.this).inflate(layout, parent, false);
+            if (viewType == 1) {
+                view = LayoutInflater.from(MainActivity.this).inflate(R.layout.item_contact, parent, false);
             } else {
-                view = new MultipleContactView(MainActivity.this, viewType, textPaintSmallName, textPaintRecentMessage, defaultAvatar);
+                view = new MultipleContactView(MainActivity.this, viewType, textPaintLargeName, textPaintSmallName, textPaintRecentMessage, defaultAvatar);
+                RecyclerView.LayoutParams params = new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                view.setLayoutParams(params);
             }
             view.setBackground(selectableItemBackground.getConstantState().newDrawable(getResources(), getTheme()));
-            if (viewType == 0) {
-                return new TwoContactViewHolder((ViewGroup) view);
-            } else if (viewType == 1) {
+            if (viewType == 1) {
                 return new SingleContactViewHolder((ViewGroup) view);
             } else {
                 return new MultiContactViewHolder((MultipleContactView) view);
@@ -193,7 +187,7 @@ public class MainActivity extends AppActivity {
             final AndroidUser contact = contacts.get(packed >> 8);
             int chunk = packed & 0xff;
             int offset = chunk * CONTACT_CHUNK_SIZE;
-            boolean isLast = offset + CONTACT_CHUNK_SIZE > contact.subusers.size();
+            boolean isLast = offset + CONTACT_CHUNK_SIZE >= contact.subusers.size();
             holder.bind(contact.subusers, offset, isLast);
             holder.itemView.setOnClickListener(new View.OnClickListener() {
                 @Override
@@ -211,20 +205,7 @@ public class MainActivity extends AppActivity {
             ArrayList<AndroidUser.SubUser> subusers = contacts.get(packed >> 8).subusers;
             int chunk = packed & 0xff;
             int offset = chunk * CONTACT_CHUNK_SIZE;
-            int count = min(subusers.size() - offset, CONTACT_CHUNK_SIZE);
-            if (count != 2) {
-                return count;
-            }
-            String name1 = subusers.get(offset).getName();
-            String name2 = subusers.get(offset + 1).getName();
-            float width = StaticLayout.getDesiredWidth(name1 + " and " + name2, textPaint);
-            float startMargin = 114 * App.density;
-            float endMargin = 98 * App.density;
-            if (width > contactsList.getWidth() - startMargin - endMargin) {
-                return 2;
-            } else {
-                return 0;
-            }
+            return min(subusers.size() - offset, CONTACT_CHUNK_SIZE);
         }
 
         @Override
@@ -267,35 +248,6 @@ public class MainActivity extends AppActivity {
         }
     }
 
-    private class TwoContactViewHolder extends ContactViewHolder {
-        private ImageView avatar1;
-        private ImageView avatar2;
-        private TextView displayName;
-        private ImageView colorCircle1;
-        private ImageView colorCircle2;
-        private TextView messageText;
-
-        public TwoContactViewHolder(ViewGroup view) {
-            super(view);
-            avatar1 = (ImageView) view.findViewById(R.id.avatar1);
-            avatar2 = (ImageView) view.findViewById(R.id.avatar2);
-            displayName = (TextView) view.findViewById(R.id.displayName);
-            colorCircle1 = (ImageView) view.findViewById(R.id.colorCircle1);
-            colorCircle2 = (ImageView) view.findViewById(R.id.colorCircle2);
-            messageText = (TextView) view.findViewById(R.id.messageText);
-        }
-
-        public void bind(ArrayList<AndroidUser.SubUser> subusers, int offset, boolean isLast) {
-            AndroidUser.SubUser subuser1 = subusers.get(0);
-            AndroidUser.SubUser subuser2 = subusers.get(1);
-            setAvatarIfPresent(avatar1, subuser1);
-            setAvatarIfPresent(avatar2, subuser2);
-            displayName.setText(String.format(namePairFormat, subuser1.getName(), subuser2.getName()));
-            colorCircle1.setColorFilter(subuser1.getColor());
-            colorCircle2.setColorFilter(subuser2.getColor());
-        }
-    }
-
     private class MultiContactViewHolder extends ContactViewHolder {
         public MultiContactViewHolder(MultipleContactView view) {
             super(view);
@@ -304,16 +256,16 @@ public class MainActivity extends AppActivity {
         public void bind(ArrayList<AndroidUser.SubUser> subusers, int offset, boolean isLast) {
             MultipleContactView view = (MultipleContactView) itemView;
             view.setSubusers(subusers, offset, isLast);
+            int dp2 = (int) (2 * App.density);
             int dp16 = (int) (16 * App.density);
-            int dp18 = (int) (18 * App.density);
             if (offset == 0 && isLast) {
-                view.setPadding(dp16, dp16, dp16, dp18);
+                view.setPadding(dp16, dp16, dp16, dp16);
             } else if (offset == 0) {
-                view.setPadding(dp16, dp16, dp16, 0);
+                view.setPadding(dp16, dp16, dp16, dp2);
             } else if (isLast) {
-                view.setPadding(dp16, 0, dp16, dp18);
+                view.setPadding(dp16, 0, dp16, dp16);
             } else {
-                view.setPadding(dp16, 0, dp16, 0);
+                view.setPadding(dp16, 0, dp16, dp2);
             }
         }
     }
