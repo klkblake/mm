@@ -12,6 +12,7 @@ import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.RecyclerView.ViewHolder;
 import android.text.TextPaint;
+import android.util.ArrayMap;
 import android.util.TypedValue;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -139,12 +140,13 @@ public class MainActivity extends AppActivity {
     }
 
     private class ContactListAdapter extends RecyclerView.Adapter<ContactViewHolder> {
+        private ArrayMap<AndroidUser, ArrayList<ContactView>> viewsForContact = new ArrayMap<>();
         @Override
         public ContactViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
             ContactView view = new ContactView(MainActivity.this, viewType, textPaintLargeName, textPaintSmallName, textPaintRecentMessage, defaultAvatar);
             RecyclerView.LayoutParams params = new RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             view.setLayoutParams(params);
-            view.setBackground(selectableItemBackground.getConstantState().newDrawable(getResources(), getTheme()));
+            view.setBackground(selectableItemBackground.mutate().getConstantState().newDrawable(getResources(), getTheme()));
             return new ContactViewHolder(view);
         }
 
@@ -162,13 +164,29 @@ public class MainActivity extends AppActivity {
         }
 
         @Override
+        public void onViewRecycled(ContactViewHolder holder) {
+            ArrayList<ContactView> views = viewsForContact.get(holder.contact);
+            ContactView view = (ContactView) holder.itemView;
+            views.remove(view);
+            if (views.size() == 0) {
+                viewsForContact.remove(holder.contact);
+            }
+        }
+
+        @Override
         public void onBindViewHolder(final ContactViewHolder holder, int position) {
             int packed = getItem(position);
             final AndroidUser contact = contacts.get(packed >> 8);
             int chunk = packed & 0xff;
             int offset = chunk * CONTACT_CHUNK_SIZE;
             boolean isLast = offset + CONTACT_CHUNK_SIZE >= contact.subusers.size();
-            holder.bind(contact.subusers, offset, isLast);
+            ArrayList<ContactView> views = viewsForContact.get(contact);
+            if (views == null) {
+                views = new ArrayList<>();
+                viewsForContact.put(contact, views);
+            }
+            views.add((ContactView) holder.itemView);
+            holder.bind(views, contact, offset, isLast);
             holder.itemView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
@@ -199,13 +217,16 @@ public class MainActivity extends AppActivity {
     }
 
     private class ContactViewHolder extends ViewHolder {
+        public AndroidUser contact;
+
         public ContactViewHolder(ContactView view) {
             super(view);
         }
 
-        public void bind(ArrayList<AndroidUser.SubUser> subusers, int offset, boolean isLast) {
+        public void bind(ArrayList<ContactView> views, AndroidUser contact, int offset, boolean isLast) {
+            this.contact = contact;
             ContactView view = (ContactView) itemView;
-            view.setSubusers(subusers, offset, isLast);
+            view.bind(views, contact.subusers, offset, isLast);
             int dp2 = (int) (2 * App.density);
             int dp16 = (int) (16 * App.density);
             if (offset == 0 && isLast) {

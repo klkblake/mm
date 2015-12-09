@@ -51,6 +51,7 @@ public class ContactView extends View {
     private int postText = textMargin + circleRadius + step + circleRadius;
     private Bitmap defaultAvatar;
     private String[] names;
+    private ArrayList<ContactView> views;
 
     public ContactView(Context context, int count, TextPaint textPaintLarge, TextPaint textPaintSmall, TextPaint textPaintRecentMessage, Bitmap defaultAvatar) {
         super(context);
@@ -73,9 +74,31 @@ public class ContactView extends View {
         textPaintSmall.getFontMetricsInt(fm);
         textOffsetSmall = fm.top;
         this.defaultAvatar = defaultAvatar;
+
+        addOnLayoutChangeListener(new OnLayoutChangeListener() {
+            @Override
+            public void onLayoutChange(View v, int newLeft, int newTop, int newRight, int newBottom, int oldLeft, int oldTop, int oldRight, int oldBottom) {
+                int left = Integer.MAX_VALUE;
+                int top = Integer.MAX_VALUE;
+                int right = Integer.MIN_VALUE;
+                int bottom = Integer.MIN_VALUE;
+                for (ContactView view : views) {
+                    left = min(left, view.getLeft());
+                    top = min(top, view.getTop());
+                    right = max(right, view.getRight());
+                    bottom = max(bottom, view.getBottom());
+                }
+                for (ContactView view : views) {
+                    int offsetX = view.getLeft();
+                    int offsetY = view.getTop();
+                    view.getBackground().setHotspotBounds(left - offsetX, top - offsetY, right - offsetX, bottom - offsetY);
+                }
+            }
+        });
     }
 
-    public void setSubusers(ArrayList<AndroidUser.SubUser> subusers, int offset, boolean drawRecent) {
+    public void bind(ArrayList<ContactView> views, ArrayList<AndroidUser.SubUser> subusers, int offset, boolean drawRecent) {
+        this.views = views;
         for (int i = 0; i < count; i++) {
             AndroidUser.SubUser subuser = subusers.get(i + offset);
             if (subuser.hasAvatar()) {
@@ -89,6 +112,37 @@ public class ContactView extends View {
         this.drawRecent = drawRecent;
         requestLayout();
         invalidate();
+    }
+
+    private boolean propagate = true;
+    @Override
+    public void dispatchDrawableHotspotChanged(float x, float y) {
+        if (propagate && views.size() > 1) {
+            x += getLeft();
+            y += getTop();
+            for (ContactView view : views) {
+                if (view == this) {
+                    continue;
+                }
+                view.propagate = false;
+                view.drawableHotspotChanged(x - view.getLeft(), y - view.getTop());
+                view.propagate = true;
+            }
+        }
+    }
+
+    @Override
+    protected void dispatchSetPressed(boolean pressed) {
+        if (propagate && views.size() > 1) {
+            for (ContactView view : views) {
+                if (view == this || view.isPressed() == pressed) {
+                    continue;
+                }
+                view.propagate = false;
+                view.setPressed(pressed);
+                view.propagate = true;
+            }
+        }
     }
 
     @Override
