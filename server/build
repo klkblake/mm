@@ -1,31 +1,4 @@
 #!/bin/bash
-DEBUG=no
 
-CFLAGS="-Wall -Weverything -Wno-vla -Wno-padded -Wno-reserved-id-macro -Wno-missing-prototypes -Wno-unused-function -Wno-unused-macros -Wno-unused-variable -Wno-newline-eof $CFLAGS"
-
-CC=${CC:-clang}
-
-if [[ "$1" == debug ]]; then
-	DEBUG=yes
-	CFLAGS="-O0 -g $CFLAGS"
-	if [[ "$2" == undefined ]]; then
-		CFLAGS="-fsanitize=undefined $CFLAGS"
-	elif [[ "$2" == address ]]; then
-		CFLAGS="-fsanitize=address -fsanitize=leak $CFLAGS"
-	elif [[ "$2" == memory ]]; then
-		CFLAGS="-fsanitize=memory $CFLAGS"
-	fi
-elif [[ "$1" == fuzz ]]; then
-	# AFL fuzzing is not currently implemented
-	CC=afl-clang
-fi
-
-if [[ DEBUG == no ]]; then
-	CFLAGS="-O3 $CFLAGS"
-fi
-
-CFLAGS="-std=gnu11 -x c $CFLAGS"
-
-set -e
-
+source ../common/build.sh
 $CC $CFLAGS -pthreads -o mm src/main.c
