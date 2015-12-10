@@ -7,9 +7,16 @@
     <string name="take_photo">Take photo</string>
     <string name="select_photos">Select photos</string>
     <string name="message_entry_hint">Write a message</string>
-    <string name="action_add_contact">Add new contact</string>
+    <string name="action_send_contact_request">Send contact request</string>
     <plurals name="more_pictures">
         <item quantity="one">+ %d more</item>
         <item quantity="other">+ %d more</item>
     </plurals>
+    <string name="title_activity_send_contact_request">Send contact request</string>
+    <string name="new_contact_instructions">
+        If sending a contact request isn\'t convenient, you can enter their contact key below.
+        \n\n
+        The contact key is accessible from the user info page.
+    </string>
+    <string name="title_activity_add_contact">Add new contact</string>
 </resources>

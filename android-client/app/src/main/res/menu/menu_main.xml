@@ -3,10 +3,10 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     tools:context=".MainActivity">
     <item
-        android:id="@+id/action_add_contact"
+        android:id="@+id/action_send_contact_request"
         android:icon="@drawable/ic_person_add_24dp"
         app:showAsAction="ifRoom"
-        android:title="@string/action_add_contact" />
+        android:title="@string/action_send_contact_request" />
     <item
         android:id="@+id/action_settings"
         android:icon="@drawable/ic_settings_24dp"

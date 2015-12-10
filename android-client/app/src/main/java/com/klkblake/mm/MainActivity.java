@@ -132,7 +132,9 @@ public class MainActivity extends AppActivity {
 
         if (id == R.id.action_settings) {
             return true;
-        } else if (id == R.id.action_add_contact) {
+        } else if (id == R.id.action_send_contact_request) {
+            Intent intent = new Intent(App.context, SendContactRequestActivity.class);
+            App.startActivity(intent);
             return true;
         }
 

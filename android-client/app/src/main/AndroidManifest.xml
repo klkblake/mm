@@ -25,6 +25,29 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".SendContactRequestActivity"
+            android:label="@string/title_activity_send_contact_request"
+            android:parentActivityName=".MainActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".MainActivity" />
+        </activity>
+        <activity
+            android:name=".AddContactActivity"
+            android:label="@string/title_activity_add_contact"
+            android:parentActivityName=".MainActivity">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value="com.klkblake.mm.MainActivity" />
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" android:host="klkblake.com" android:pathPrefix="/mm/contacts/add/" />
+            </intent-filter>
+        </activity>
+        <activity
             android:name=".ChatActivity"
             android:parentActivityName=".MainActivity">
             <meta-data
