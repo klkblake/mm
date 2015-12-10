@@ -1,15 +1,24 @@
 package com.klkblake.mm.common;
 
-import com.klkblake.mm.common.Message;
-import com.klkblake.mm.common.SendingData;
-import com.klkblake.mm.common.Util;
-
 import java.io.File;
 import java.util.ArrayList;
 
-import static com.klkblake.mm.common.Failure.*;
+import static com.klkblake.mm.common.Failure.AssertionFailure;
+import static com.klkblake.mm.common.Failure.FilesystemFailure;
 
 public class Storage {
+    /*
+     * Design for the storage system:
+     *  - We can't have all messages loaded.
+     *  - We want to pretend we can.
+     * Solution: paging.
+     *  - Each, say, thousand messages are stored in a separate file.
+     *  - Files are in a very compact format.
+     *  - Index table at front -- exactly one disk block.
+     *  - First/last index entry is a checksum of the file?
+     *  - mmap() into memory
+     */
+
     // TODO Always have all past messages loaded
     public static final int TYPE_SHIFT = 29;
     public static final int INDEX_MASK = (1 << TYPE_SHIFT) - 1;
@@ -68,7 +77,6 @@ public class Storage {
     }
 
     public synchronized Message getMessage(int id) {
-        // XXX threading? Is this remotely safe?
         long timestamp = timestamps.data[id];
         boolean author = authors.data[id];
         int tyindex = indexes.data[id];
