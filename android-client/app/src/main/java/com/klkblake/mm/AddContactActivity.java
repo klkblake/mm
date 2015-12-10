@@ -1,14 +1,14 @@
 package com.klkblake.mm;
 
+import android.annotation.SuppressLint;
 import android.os.Bundle;
-import android.app.Activity;
 
 public class AddContactActivity extends AppActivity {
 
+    @SuppressLint("MissingSuperCall")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_add_contact);
+        onCreate(savedInstanceState, R.layout.activity_add_contact);
     }
 
 }

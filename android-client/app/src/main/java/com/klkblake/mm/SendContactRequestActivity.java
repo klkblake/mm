@@ -1,5 +1,6 @@
 package com.klkblake.mm;
 
+import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.os.Bundle;
 import android.util.Base64;
@@ -9,10 +10,10 @@ import com.klkblake.mm.common.Resources;
 
 public class SendContactRequestActivity extends AppActivity {
 
+    @SuppressLint("MissingSuperCall")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_send_contact_request);
+        onCreate(savedInstanceState, R.layout.activity_send_contact_request);
     }
 
     public void sendContactRequest(View view) {

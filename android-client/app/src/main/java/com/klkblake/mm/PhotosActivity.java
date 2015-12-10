@@ -1,5 +1,6 @@
 package com.klkblake.mm;
 
+import android.annotation.SuppressLint;
 import android.app.Fragment;
 import android.app.FragmentManager;
 import android.content.Intent;
@@ -23,10 +24,10 @@ public class PhotosActivity extends AppActivity {
     private int messageID;
     private String photosDir;
 
+    @SuppressLint("MissingSuperCall")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_photos);
+        super.onCreate(savedInstanceState, R.layout.activity_photos);
         Intent intent = getIntent();
         photosDir = intent.getStringExtra(EXTRA_PHOTOS_DIR);
         messageID = intent.getIntExtra(EXTRA_MESSAGE_ID, -1);

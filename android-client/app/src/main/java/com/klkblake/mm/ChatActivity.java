@@ -1,5 +1,6 @@
 package com.klkblake.mm;
 
+import android.annotation.SuppressLint;
 import android.content.ClipData;
 import android.content.ComponentName;
 import android.content.Context;
@@ -54,10 +55,10 @@ public class ChatActivity extends AppActivity {
     private FloatingActionButton sendButton;
     private AndroidUser contact;
 
+    @SuppressLint("MissingSuperCall")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_chat);
+        onCreate(savedInstanceState, R.layout.activity_chat);
         messageList = (ListView) findViewById(R.id.messageList);
         composeText = (EditText) findViewById(R.id.composeText);
         sendButton = (FloatingActionButton) findViewById(R.id.sendButton);

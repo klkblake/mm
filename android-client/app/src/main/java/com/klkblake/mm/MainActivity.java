@@ -1,5 +1,6 @@
 package com.klkblake.mm;
 
+import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.res.TypedArray;
 import android.graphics.Bitmap;
@@ -61,10 +62,10 @@ public class MainActivity extends AppActivity {
         contacts.add(massive);
     }
 
+    @SuppressLint("MissingSuperCall")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        onCreate(savedInstanceState, R.layout.activity_main);
 
         TypedValue background = new TypedValue();
         getTheme().resolveAttribute(R.attr.selectableItemBackground, background, true);
