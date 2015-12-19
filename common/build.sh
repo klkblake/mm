@@ -23,6 +23,6 @@ fi
 
 CFLAGS="-I../common $SEARCH $CFLAGS"
 
-CFLAGS="-Wall -Weverything -Wno-vla -Wno-padded -Wno-reserved-id-macro -Wno-missing-prototypes -Wno-unused-function -Wno-unused-macros -Wno-unused-variable -Wno-newline-eof $CFLAGS"
+CFLAGS="-Wall -Weverything -Wno-gnu-empty-initializer -Wno-zero-length-array -Wno-vla -Wno-padded -Wno-reserved-id-macro -Wno-missing-prototypes -Wno-unused-function -Wno-unused-macros -Wno-unused-variable -Wno-newline-eof $CFLAGS"
 
 CFLAGS="-std=gnu11 -x c $CFLAGS"
