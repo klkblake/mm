@@ -52,6 +52,7 @@ public class Session implements Runnable {
     private static final byte PTYPE_PHOTOS = 1;
 
     private volatile boolean dead = true;
+    private final String server;
     private Selector selector;
     private SocketChannel controlChannel;
     private SocketChannel dataChannel;
@@ -76,7 +77,8 @@ public class Session implements Runnable {
     private long dataServerCounter;
     private Crypto crypto;
 
-    public Session(Storage storage, SessionListener listener) throws IOException {
+    public Session(String server, Storage storage, SessionListener listener) throws IOException {
+        this.server = server;
         this.storage = storage;
         this.listener = listener;
         controlSendBuf.order(ByteOrder.LITTLE_ENDIAN);
@@ -167,8 +169,8 @@ public class Session implements Runnable {
                 // TODO notify app on connection established
                 controlChannel = SocketChannel.open();
                 dataChannel = SocketChannel.open();
-                controlChannel.socket().connect(new InetSocketAddress("klkblake.com", 29192), 10000);
-                dataChannel.socket().connect(new InetSocketAddress("klkblake.com", 29292), 10000);
+                controlChannel.socket().connect(new InetSocketAddress(server, 29192), 10000);
+                dataChannel.socket().connect(new InetSocketAddress(server, 29292), 10000);
                 controlChannel.configureBlocking(false);
                 dataChannel.configureBlocking(false);
                 controlKey = controlChannel.register(selector, OP_READ);

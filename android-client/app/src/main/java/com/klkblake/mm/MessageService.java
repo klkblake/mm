@@ -40,7 +40,7 @@ public final class MessageService extends Service implements SessionListener {
         photosDir = getCacheDir() + "/photos";
         storage = new Storage(photosDir);
         try {
-            session = new Session(storage, this);
+            session = new Session(BuildConfig.DEBUG ? "localhost" : "klkblake.com", storage, this);
         } catch (IOException e) {
             e.printStackTrace();
         }
