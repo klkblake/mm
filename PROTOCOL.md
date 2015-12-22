@@ -20,6 +20,20 @@ control channel are capped to a maximum size of 1024.
 
 The type `key` represents a 32 byte public key.
 
+Although the connection runs over TCP, the protocol is defined in terms of
+packets, whose sizes are carefully chosen to prevent fragmentation. The sizes
+are chosen under the assumption of IPv6; in practice IPv4 has lower overhead
+and violation of the guaranteed IPv6 minimum MTU is very rare. The packet size
+is:
+
+    1280 guarenteed by IPv6
+     - 16 for the two Mobile IPv6 headers
+     - 20 for the fixed size TCP header
+     - 34 for TCP SACK
+     = 1210 bytes
+
+The maximum message size
+
 Encryption Negotiation
 ----------------------
 

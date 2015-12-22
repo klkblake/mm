@@ -1,4 +1,5 @@
 #!/bin/bash
 
+SEARCH="-I../common -I../libsodium/libsodium-linux/include -L../libsodium/libsodium-linux/lib"
 source ../common/build.sh
-$CC $CFLAGS -pthreads -o mm src/main.c
+$CC -static $CFLAGS -o mm src/main.c -lsodium

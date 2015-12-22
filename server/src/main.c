@@ -7,7 +7,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <sys/epoll.h>
-#include <pthread.h>
+
+#include <sodium.h>
 
 #define LISTEN_QUEUE_SIZE 128
 
